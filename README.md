@@ -229,6 +229,36 @@ Every idea above has a running example. Rather than list them here, browse the *
 
 ---
 
+## Where Gratify sits (related work)
+
+Gratify combines three ideas that usually travel separately: the **MVU architecture** (one immutable state, a pure `update`, a pure `view`), a **retained canvas scene** (no DOM, no CSS — the framework paints every pixel), and **animation as the substrate** (springs and channels are the default, not a bolt-on). Plenty of excellent projects own one or two of these axes; almost none combine all three, which is the niche Gratify occupies.
+
+### The architecture — MVU / unidirectional data flow
+
+- [**Elm**](https://elm-lang.org) — the origin of MVU (`init` / `update` / `view`, immutable model, typed messages). Gratify is Elm's shape in TypeScript, minus the virtual DOM and plus built-in tweening.
+- [**Redux**](https://redux.js.org) — the same reducer + action (≈ intent) loop, rendering to the DOM (usually via React).
+- [**Cycle.js**](https://cycle.js.org) — pure dataflow with streams in place of a reducer.
+- [**Hyperapp**](https://github.com/jorgebucaran/hyperapp) — a tiny Elm-like with a virtual DOM.
+- [**Bubble Tea**](https://github.com/charmbracelet/bubbletea) (Go) and [**Iced**](https://github.com/iced-rs/iced) (Rust) — The-Elm-Architecture ports outside the browser.
+
+### The medium — self-painted / canvas UI (no DOM)
+
+- [**Flutter**](https://flutter.dev) — the closest large project: a retained widget tree painted by its own engine (Skia), "everything is a widget." Differs in that widgets are *stateful*, not MVU, and there is no automatic animation channel.
+- [**Dear ImGui**](https://github.com/ocornut/imgui) and [**egui**](https://github.com/emilk/egui) (Rust) — GPU/canvas GUIs, but *immediate mode* (rebuilt every frame, no retained scene) — the opposite pole from Gratify's keyed, retained instances.
+- [**Makepad**](https://github.com/makepad/makepad) (Rust) — GPU-rendered, shader-styled, live-designed UI; spiritually near Gratify's canvas-plus-juice ethos.
+- [**PixiJS**](https://pixijs.com) and [**Konva**](https://konvajs.org) — retained canvas scene-graphs, but with no application architecture; you would build the MVU layer on top.
+
+### The juice — animation as a first-class concern
+
+- [**Rive**](https://rive.app) — state-machine-driven animated vector UI, retained and GPU-rendered; the closest match on "motion is the medium," though it is design-tool-first rather than code-authored.
+- [**react-spring**](https://www.react-spring.dev) and [**Motion**](https://motion.dev) (formerly Framer Motion) — spring-based animation, but bolted onto React rather than being the core model.
+- [**GSAP**](https://gsap.com) — the powerful imperative timeline library that Gratify deliberately does *not* resemble: no timelines, no `animate()` calls, values just chase targets.
+- [**Lottie**](https://airbnb.io/lottie/) — playback of pre-authored animations.
+
+**The nearest single neighbors:** Flutter (retained, self-painted widget tree), Rive (animation-first retained canvas), Elm (the architectural twin), and Makepad (canvas + GPU + juice). Each shares one or two axes; none ships the exact combination of *MVU + retained canvas + springs-by-default*. The shortest honest description is "Flutter, if it were Elm with automatic springs."
+
+---
+
 ## Related projects
 
 Gratify comes out of the [**Ara 3D**](https://github.com/ara3d) ecosystem and a lineage of value-oriented, immutable design:
