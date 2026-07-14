@@ -1,14 +1,16 @@
-import{p as u,i as f,r as h,v as l,G as x,c as b,P as y,o as k,m as I,d as z,S as M,L as c}from"./source-panel-D7B0FxD0.js";import{S}from"./widgets-DAP5Pepg.js";import{w as D}from"./widgets-deNE_SuD.js";const P=`// ============================================================================
+import{p as c,j as m,r as d,G as g,v as h,c as f,P as v,i as b,m as x,d as y,q as k,S as I,L as a}from"./source-panel-cwX9nwkb.js";import{S as z}from"./widgets-DkU5qRHh.js";import{w as M}from"./widgets-deNE_SuD.js";const S=`// ============================================================================
 // Example: split-pane — custom layout parts, reflow, and live resize.
 //
-// Three brand-new layout containers, each ONE part() with measure/place — no
+// Two custom layout containers, each ONE part() with measure/arrange — no
 // framework changes, exactly as "a custom layout is a part" promises:
 //
 //   • SplitPane — fills the viewport and hands its two panes a rect split by a
 //     fraction; a draggable vertical Divider between them drives the fraction.
-//   • Flow      — a wrapping row: fixed-size children pack left-to-right and
-//     wrap to the next line to fill whatever width the pane gives it.
 //   • Pane      — a well that stretches its single child to fill it.
+//
+// The wrapping row is \`Flow\`, now a Gratify built-in: with real two-phase
+// layout it reports an honest height from the width it's given, so it composes
+// anywhere (no local copy needed).
 //
 // The left pane is a Flow of fixed-size buttons. The right pane holds an
 // EXTERNAL slider that sets every button's width. Drag the divider → both panes
@@ -18,7 +20,7 @@ import{p as u,i as f,r as h,v as l,G as x,c as b,P as y,o as k,m as I,d as z,S a
 // ============================================================================
 
 import {
-  calpha, clamp, Gesture, Intentish, Label, mount, part, Press, rect, Stack,
+  calpha, clamp, Flow, Gesture, Intentish, Label, mount, part, Press, rect, Stack,
   surface, v, Element,
 } from "gratify";
 import { Slider } from "../shared/widgets";
@@ -56,11 +58,12 @@ function update(doc: Doc, intent: Intent): Doc {
 const widthOf = (width01: number) => MIN_W + width01 * (MAX_W - MIN_W);
 
 // ── SplitPane — fills the viewport, splits it by a fraction ───────────────────
-// measure returns (0,0) so layoutScene places it at the full viewport, exactly
-// like a Pan surface. Its place() carves that rect into left | divider | right.
+// measure returns the room it's offered ("I fill whatever I'm given"), so it
+// spans the full viewport. Its arrange() carves that rect into left | divider |
+// right.
 const SplitPane = part<{ split: number }>()("split-pane", {
-  measure: () => v(0, 0),
-  place: (props, r) => {
+  measure: (_props, avail) => avail,
+  arrange: (props, r) => {
     const x = r.x + MARGIN, y = r.y + MARGIN, w = r.w - 2 * MARGIN, h = r.h - 2 * MARGIN;
     const f = clamp(props.split, 0.12, 0.88);
     const leftW = f * w - DIV / 2;
@@ -99,30 +102,14 @@ const Divider = part<Record<string, never>>()("divider", {
 });
 
 // ── Pane — a well that stretches its single child to fill it ──────────────────
+// measure returns what it's offered (fill); arrange gives its one child the
+// whole rect. \`Flow\` (now a Gratify built-in) drops straight into it and, given
+// a real width, reports an honest wrapped height.
 const Pane = part<Record<string, never>>()("pane", {
-  measure: () => v(0, 0),
-  place: (_p, r, kids) => kids.map(() => r),   // one child, full rect
+  measure: (_p, avail) => avail,
+  arrange: (_p, r, kids) => kids.map(() => r),   // one child, full rect
   style: (t) => ({ well: calpha(t.bg, 0.4), edge: t.muted }),
   render: (node, paint, s) => paint.box(node.rect, 10, s.well, s.edge, 1),
-});
-
-// ── Flow — a wrapping row: pack left-to-right, wrap to fill the given width ────
-// The height of a wrap layout depends on the WIDTH it is given — which only
-// exists at place() time — so measure() can't compute it. That is fine here:
-// SplitPane hands Flow a fixed pane rect, and place() does all the work.
-const Flow = part<{ gap?: number; pad?: number }>()("flow", {
-  measure: () => v(0, 0),
-  place: (props, r, kids) => {
-    const gap = props.gap ?? 8, pad = props.pad ?? 12;
-    let x = r.x + pad, y = r.y + pad, rowH = 0;
-    return kids.map(({ size }) => {
-      if (x + size.x > r.right - pad && x > r.x + pad) { x = r.x + pad; y += rowH + gap; rowH = 0; }
-      const out = rect(x, y, size.x, size.y);
-      x += size.x + gap;
-      rowH = Math.max(rowH, size.y);
-      return out;
-    });
-  },
 });
 
 // ── FixedButton — a fixed-size button whose width comes from a prop ───────────
@@ -176,4 +163,4 @@ attachSourcePanel([
   { name: "main.ts", code: mainSource },
   { name: "widgets.ts (shared)", code: widgetsSource },
 ]);
-`,o=16,p=12,m=52,A=176;function N(e,t){switch(t.kind){case"split":return{...e,split:t.value};case"width":return{...e,width01:t.value};case"click":return{...e,lastClicked:t.label}}}const W=e=>m+e*(A-m),G=u()("split-pane",{measure:()=>l(0,0),place:(e,t)=>{const n=t.x+o,i=t.y+o,r=t.w-2*o,a=t.h-2*o,s=f(e.split,.12,.88)*r-p/2;return[h(n,i,s,a),h(n+s,i,p,a),h(n+s+p,i,r-s-p,a)]}}),_=u()("divider",{size:()=>l(p,0),style:(e,t)=>({bar:e.mix(e.muted,e.accent,.25+.6*t.hover+.3*(t.press||0)),grip:e.mix(e.textDim,e.textBright,t.hover)}),render:(e,t,n)=>{const i=e.rect;t.box(h(i.center.x-1.5,i.y+6,3,i.h-12),1.5,n.bar);for(const r of[-7,0,7])t.dot(l(i.center.x,i.center.y+r),1.6,n.grip)},on:[x({begin:()=>({}),during:(e,t,n)=>{var r;const i=((r=t.view)==null?void 0:r.w)??1;return{kind:"split",value:f((n.x-o)/(i-2*o),.12,.88)}}})]}),g=u()("pane",{measure:()=>l(0,0),place:(e,t,n)=>n.map(()=>t),style:e=>({well:b(e.bg,.4),edge:e.muted}),render:(e,t,n)=>t.box(e.rect,10,n.well,n.edge,1)}),R=u()("flow",{measure:()=>l(0,0),place:(e,t,n)=>{const i=e.gap??8,r=e.pad??12;let a=t.x+r,w=t.y+r,s=0;return n.map(({size:d})=>{a+d.x>t.right-r&&a>t.x+r&&(a=t.x+r,w+=s+i,s=0);const v=h(a,w,d.x,d.y);return a+=d.x+i,s=Math.max(s,d.y),v})}}),B=u()("fixed-button",{size:e=>l(e.w,34),style:(e,t)=>({...k(e,t,{}),corner:7}),render:(e,t,n)=>{t.box(e.rect,n.corner,n.fill,n.edge,1),t.label(e.props.label,e.rect.center,n.text,{weight:500,size:12})},on:[y(e=>e.props.press)]});function C(e){const t=W(e.width01),n=e.labels.map((i,r)=>B(`b${r}`,{label:i,w:t,press:{kind:"click",label:i}}));return G("root",{split:e.split},[g("left",{},[R("flow",{gap:10,pad:14},n)]),_("divider",{}),g("right",{},[M("controls",{gap:14,pad:20,align:"stretch"},[c("h",{text:"Controls",weight:600,size:15,bright:!0}),c("cap",{text:"Button width (drives every button in the left pane)",dim:!0,size:11}),S("width",{value:e.width01,set:i=>({kind:"width",value:i})}),c("readout",{text:`width ${Math.round(t)}px  ·  split ${Math.round(e.split*100)}%`,dim:!0,size:11}),c("last",{text:e.lastClicked?`last clicked: ${e.lastClicked}`:"click a button →",dim:!0,size:11}),c("hint",{text:"Drag the divider · drag the slider · resize the window — it all reflows.",dim:!0,size:11})])])])}const F=document.getElementById("c");I(F,{init:{split:.62,width01:.3,lastClicked:null,labels:Array.from({length:14},(e,t)=>`Button ${t+1}`)},update:N,view:C});z([{name:"main.ts",code:P},{name:"widgets.ts (shared)",code:D}]);
+`,s=16,o=12,u=52,D=176;function P(e,t){switch(t.kind){case"split":return{...e,split:t.value};case"width":return{...e,width01:t.value};case"click":return{...e,lastClicked:t.label}}}const _=e=>u+e*(D-u),A=c()("split-pane",{measure:(e,t)=>t,arrange:(e,t)=>{const n=t.x+s,i=t.y+s,r=t.w-2*s,p=t.h-2*s,l=m(e.split,.12,.88)*r-o/2;return[d(n,i,l,p),d(n+l,i,o,p),d(n+l+o,i,r-l-o,p)]}}),G=c()("divider",{size:()=>h(o,0),style:(e,t)=>({bar:e.mix(e.muted,e.accent,.25+.6*t.hover+.3*(t.press||0)),grip:e.mix(e.textDim,e.textBright,t.hover)}),render:(e,t,n)=>{const i=e.rect;t.box(d(i.center.x-1.5,i.y+6,3,i.h-12),1.5,n.bar);for(const r of[-7,0,7])t.dot(h(i.center.x,i.center.y+r),1.6,n.grip)},on:[g({begin:()=>({}),during:(e,t,n)=>{var r;const i=((r=t.view)==null?void 0:r.w)??1;return{kind:"split",value:m((n.x-s)/(i-2*s),.12,.88)}}})]}),w=c()("pane",{measure:(e,t)=>t,arrange:(e,t,n)=>n.map(()=>t),style:e=>({well:f(e.bg,.4),edge:e.muted}),render:(e,t,n)=>t.box(e.rect,10,n.well,n.edge,1)}),N=c()("fixed-button",{size:e=>h(e.w,34),style:(e,t)=>({...b(e,t,{}),corner:7}),render:(e,t,n)=>{t.box(e.rect,n.corner,n.fill,n.edge,1),t.label(e.props.label,e.rect.center,n.text,{weight:500,size:12})},on:[v(e=>e.props.press)]});function W(e){const t=_(e.width01),n=e.labels.map((i,r)=>N(`b${r}`,{label:i,w:t,press:{kind:"click",label:i}}));return A("root",{split:e.split},[w("left",{},[k("flow",{gap:10,pad:14},n)]),G("divider",{}),w("right",{},[I("controls",{gap:14,pad:20,align:"stretch"},[a("h",{text:"Controls",weight:600,size:15,bright:!0}),a("cap",{text:"Button width (drives every button in the left pane)",dim:!0,size:11}),z("width",{value:e.width01,set:i=>({kind:"width",value:i})}),a("readout",{text:`width ${Math.round(t)}px  ·  split ${Math.round(e.split*100)}%`,dim:!0,size:11}),a("last",{text:e.lastClicked?`last clicked: ${e.lastClicked}`:"click a button →",dim:!0,size:11}),a("hint",{text:"Drag the divider · drag the slider · resize the window — it all reflows.",dim:!0,size:11})])])])}const R=document.getElementById("c");x(R,{init:{split:.62,width01:.3,lastClicked:null,labels:Array.from({length:14},(e,t)=>`Button ${t+1}`)},update:P,view:W});y([{name:"main.ts",code:S},{name:"widgets.ts (shared)",code:M}]);
