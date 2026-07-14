@@ -4,6 +4,8 @@
 
 **A TypeScript UI framework where everything that changes, animates — and everything you build, composes.**
 
+### ▶ [Try the live demo](https://ara3d.github.io/gratify/) · [Source on GitHub](https://github.com/ara3d/gratify)
+
 Gratify renders to canvas, keeps a living animated scene in sync with your state, and asks you to learn exactly two mechanisms: **pure functions over state** for describing, and **channels** for changing. Buttons, forms, dashboards, node editors, timelines, games' UI — the same primitives cover all of it.
 
 > You describe what the UI should be for the current state. Gratify keeps a retained, animated scene in sync with that description. Everything that changes, tweens.
@@ -75,7 +77,7 @@ What this buys you, with zero animation code:
 - Swap the theme → the entire UI choreographs a cross-fade.
 - Release a dragged node → it springs to its drop point *with momentum*, because velocity lives in the channel.
 
-There are no timelines, no `animate()` calls, no easing zoo. The animation API is: *values chase targets*. That's it.
+And for motion that never stops — a pulse, a shake, an orbiting camera — read the built-in `GNode.time` clock (`sin(node.time * 4)`), no per-frame bookkeeping required. There are no timelines, no `animate()` calls, no easing zoo. The animation API is: *values chase targets* (plus one ever-rising clock). That's it.
 
 ### 2. One state, one direction
 
@@ -145,8 +147,8 @@ Gratify grew up building a node editor, so the hard problems most frameworks pun
 
 - **Anchors & connectors** — widgets publish named world-space points; wires and guides are ordinary keyed elements whose geometry references them. Delete an edge and the wire *fades out*. Click a wire to select it. Theme all wires in one line.
 - **The surface is a widget too** — the canvas grid, pan/zoom, marquee, HUD, and post-effects are just facets on the root, reachable by every extension mechanism.
-- **Pan/zoom-aware everything** — gestures, adornments, and popups all operate correctly under a viewport transform, with world-space and screen-space metrics where each belongs.
-- **Local state** — a widget's half-typed draft or open dropdown lives in runtime-owned local state, not your Doc. Undo never reopens a popup.
+- **Pan/zoom-aware everything** — gestures operate correctly under a viewport transform, and elements live on a `world` / `overlay` / `screen` layer so a HUD stays put while the content pans.
+- **Time as a first-class input** — the `GNode.time` clock drives continuous motion (pulses, tremors, orbiting cameras), and an `ambient` hook keeps the loop awake only while such motion is running, then lets it sleep again.
 
 ### 7. Small, fast, honest
 
@@ -183,25 +185,40 @@ npm run test     # headless kernel tests (deterministic step())
 npm run check    # boundary check + typecheck
 ```
 
-Every example page shows its own source next to the running app, so you can read exactly the code that produced what you're looking at.
+Open the [**live gallery**](https://ara3d.github.io/gratify/), or run `npm run dev`. Every example page shows its own source next to the running app, so you can read exactly the code that produced what you're looking at.
+
+**Start with these** — one idea each:
+
+| Example | What it teaches |
+|---|---|
+| [`counter`](examples/counter/) | the hello-world above, running verbatim |
+| [`todo`](examples/todo/) | keyed enter / exit / reflow, with zero animation code |
+| [`toggles`](examples/toggles/) | custom parts (spring toggle, drag slider) + a live theme cross-fade |
+| [`undo`](examples/undo/) | `withUndo(app)` middleware — undo replays enter animations |
+| [`extensions`](examples/extensions/) | wrap / append at all three scopes (definition, theme, use site) |
+| [`keyboard-and-drag`](examples/keyboard-and-drag/) | `Focusable` + `Keys` + a reorder gesture, composed on one part |
+
+**Then the bigger ones** — editor-grade UI, juice, and a widget library:
+
+| Example | What it shows |
+|---|---|
+| [`node-editor`](examples/node-editor/) | pan/zoom surface, anchored wires you can click and cut, magnetic wire-drag, and a Shift-drag "slice" gesture in one app-side file |
+| [`widget-board`](examples/widget-board/) | 15 creative-tool controls — sliders, ranges, angles, arcs, XY / box 2D / box 3D, color wheel, gradient — on a pannable canvas |
+| [`borders`](examples/borders/) | none / single / double / sunken / raised bevels that flip when pressed |
+| [`combo-button`](examples/combo-button/) | click fast: heat, shake, glow, and particles all build with your click rate |
+| [`magnify`](examples/magnify/) | a bouncing lens fisheye-magnifies the tiles beneath it |
+| [`earthquake`](examples/earthquake/) | click to shake a brick skyline — a fully time-based animation |
 
 - **Plan** — how we get from here to everything above: [`docs/plan.md`](docs/plan.md)
-- **Examples** — each one proves a claim above: [`examples/`](examples/)
-  - `counter` — the hello-world above, running verbatim
-  - `todo` — keyed enter/exit/reflow, zero animation code
-  - `toggles` — custom parts (spring toggle, drag slider) + live theme cross-fade
-  - `undo` — `withUndo(app)` middleware; undo replays enter animations
-  - `extensions` — wrap/append at all three scopes (definition, theme, use site)
-  - `keyboard-and-drag` — `Focusable` + `Keys` + a reorder gesture on one part
-  - `node-editor` — pan/zoom surface, anchored wires you can click and cut,
-    magnetic wire-drag with live preview, and a Shift-drag slice gesture defined
-    in one app-side file
-  - `borders` — none / single / double / sunken / raised; bevels that flip when pressed
-  - `combo-button` — click fast: heat, shake, glow, and particles build with your click rate
-  - `magnify` — a bouncing lens fisheye-magnifies the tiles beneath it
-  - `earthquake` — click to shake a brick skyline; a fully time-based animation
-  - `widget-board` — 15 Kea-style creative-tool controls (sliders, ranges, angles,
-    arcs, XY/box/cube, color wheel, gradient) on a pannable canvas
+
+### Writing Gratify code (humans and AI agents)
+
+If you're driving an agent (Cursor, Claude Code, …) to write Gratify code, point it at the condensed **skill file** first: [`.cursor/skills/gratify/SKILL.md`](.cursor/skills/gratify/SKILL.md) — the house rules, the facet cheatsheet, and a do/don't list. The short version, for anyone:
+
+- **Import from the `"gratify"` barrel only** — never reach into `src/gratify/*` from an app.
+- **Keep `update` pure and put state in the Doc.** The UI is `view(doc)`; intents are the only way to change anything.
+- **Customize by wrapping or appending, never by editing a part in place** — `mapStyle` / `mapRender` for looks, `addChannels` / `addOn` for behavior.
+- **Copy the nearest [`examples/`](examples/) file** rather than inventing APIs. Adornments, modal popups, instance-local state, and text input are *not built yet* — don't fake them.
 
 **Status:** the kernel (two-clock loop, keyed reconcile, springs, channels,
 render-on-demand sleep), the `part()` facet model, layout with animated reflow,
