@@ -62,8 +62,8 @@ const PANEL_CSS = `
   body { display: flex; flex-direction: row; }
   canvas { flex: 1 1 auto; min-width: 0; height: 100vh; }
   #source-panel {
-    flex: 0 0 44%;
-    max-width: 720px;
+    flex: 0 0 40%;
+    max-width: 640px;
     height: 100vh;
     display: flex;
     flex-direction: column;

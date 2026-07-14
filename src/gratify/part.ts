@@ -31,6 +31,10 @@ export interface GNode<P> {
   kick?(channel: string, value?: number): void;
   /** Viewport of the mounted scene: pan/zoom + css pixel size. */
   view?: { pan: Vec; zoom: number; w: number; h: number };
+  /** Seconds since the app started — an ever-rising clock for continuous
+   *  motion (pulses, shakes, bounces) that are functions of time rather than
+   *  transitions. Pair with AppSpec.ambient to keep the loop awake. */
+  time?: number;
 }
 
 export interface ChannelSpec<P> {

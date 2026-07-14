@@ -1,0 +1,207 @@
+// ============================================================================
+// Example: combo button — the faster you click, the juicier it gets.
+//
+// Click it a few times quickly and watch the "heat" build: the button swells,
+// shakes, glows, throws more particles, cycles through hotter colors, and the
+// combo counter climbs. Stop clicking and it all cools back down.
+//
+// What makes each layer of juice work:
+//   • COMBO (state)   — kept in the Doc. A click within 0.6s of the last one
+//                       increments the combo; a slow click resets it.
+//   • HEAT (channel)  — a chase channel toward the combo level that also melts
+//                       back to 0 about 1.5s after you stop. Everything visual
+//                       reads this one number.
+//   • PUNCH (impulse) — kicked to 1 on every click and decaying fast; drives
+//                       the per-click "pop".
+//   • SHAKE           — a function of GNode.time (an ever-rising clock) times
+//                       heat, so a hot button vibrates continuously.
+//   • PARTICLES       — spawned on each click, more of them as the combo grows.
+// ============================================================================
+
+import {
+  burst, calpha, Color, GNode, hsl, mount, part, Press, rect, rgb, Ring,
+  Stack, Label, v,
+} from "gratify";
+
+import { attachSourcePanel } from "../shared/source-panel";
+import mainSource from "./main.ts?raw";
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+interface ComboDocument {
+  clicks: number;
+  combo: number;
+  best: number;
+  lastClickTime: number;   // in GNode.time seconds (see the intent below)
+}
+
+// The intent carries the click's timestamp so update() stays a pure function
+// of its inputs. We use GNode.time (seconds since start), read from the button.
+type ComboIntent = { kind: "click"; time: number };
+
+const COMBO_WINDOW_SECONDS = 0.6;
+
+function update(document: ComboDocument, intent: ComboIntent): ComboDocument {
+  const gap = intent.time - document.lastClickTime;
+  const withinWindow = gap < COMBO_WINDOW_SECONDS;
+  const combo = withinWindow ? document.combo + 1 : 1;
+  return {
+    clicks: document.clicks + 1,
+    combo,
+    best: Math.max(document.best, combo),
+    lastClickTime: intent.time,
+  };
+}
+
+// ── Ranks — a label that appears at combo milestones ──────────────────────────
+
+function rankFor(combo: number): string {
+  if (combo >= 20) return "UNSTOPPABLE!";
+  if (combo >= 12) return "ON FIRE";
+  if (combo >= 7) return "COMBO!";
+  if (combo >= 3) return "Nice!";
+  return "";
+}
+
+// ── The button ────────────────────────────────────────────────────────────────
+
+interface ComboButtonProps {
+  combo: number;
+  lastClickTime: number;
+}
+
+interface ComboButtonStyle {
+  fill: Color;
+  edge: Color;
+  glow: Color;
+  glowAmount: number;
+  heat: number;      // 0..1, the master juice level
+  pop: number;       // per-click punch, 0..1
+}
+
+const HOT_MAX_COMBO = 12;   // combo at which heat reaches 1
+
+const ComboButton = part<ComboButtonProps, ComboButtonStyle>("combo-button", {
+
+  size: () => v(220, 80),
+
+  channels: {
+    // HEAT chases the combo level, but also melts back down ~1.5s after the
+    // last click — so it reflects how hot you are RIGHT NOW, not your history.
+    heat: {
+      target: (node: GNode<ComboButtonProps>) => {
+        const secondsSinceClick = (node.time ?? 0) - node.props.lastClickTime;
+        const coolness = Math.max(0, 1 - secondsSinceClick / 1.5);
+        return Math.min(1, node.props.combo / HOT_MAX_COMBO) * coolness;
+      },
+      rate: 6,
+    },
+    // PUNCH: an impulse. kick() sets it to 1 on each click; it decays fast.
+    punch: { decay: 7 },
+  },
+
+  style(tokens, channels): ComboButtonStyle {
+    const heat = channels.heat;
+    // Warm from accent → orange → red as heat climbs.
+    const warm = tokens.mix(tokens.accent, tokens.danger, heat);
+    return {
+      fill: tokens.mix(tokens.surfaceHi, warm, 0.35 + 0.55 * heat + 0.2 * channels.press),
+      edge: tokens.mix(tokens.muted, warm, Math.max(channels.hover, heat)),
+      glow: warm,
+      glowAmount: 6 + 46 * heat + 26 * channels.punch,
+      heat,
+      pop: channels.punch,
+    };
+  },
+
+  render(node, paint, style) {
+    const time = node.time ?? 0;
+    const heat = style.heat;
+
+    // SHAKE: a continuous vibration whose amplitude grows with heat, plus an
+    // extra jolt on each click (pop). Two different frequencies for x and y so
+    // it looks chaotic rather than diagonal.
+    const amplitude = (1.5 + 9 * heat) * (0.35 + style.pop);
+    const shakeX = Math.sin(time * 43) * amplitude;
+    const shakeY = Math.cos(time * 37) * amplitude;
+
+    const r = node.rect;
+    const center = v(r.center.x + shakeX, r.center.y + shakeY);
+    // The face, shifted by the shake so its center lands on `center`.
+    const face = rect(center.x - r.w / 2, center.y - r.h / 2, r.w, r.h);
+
+    // A hot button gets a rainbow rim on top of its warm fill.
+    const rimHue = (time * 90) % 360;
+    const edge = heat > 0.5 ? calpha(hsl(rimHue, 0.9, 0.6), heat) : style.edge;
+
+    // POP: scale everything around the (shaken) center for this one click.
+    const scale = 1 + 0.16 * style.pop + 0.05 * heat;
+    paint.push();
+    paint.scaleAt(center.x, center.y, scale);
+    paint.glow(style.glow, style.glowAmount, () =>
+      paint.box(face, 14, style.fill, edge, 2 + 2 * heat));
+    paint.label("CLICK ME!", center, rgb(255, 255, 255), { weight: 700, size: 20 });
+    paint.pop();
+  },
+
+  on: [
+    Press((node) => {
+      const combo = node.props.combo + 1;   // about to become this after update
+
+      // PUNCH — the per-click pop.
+      node.kick?.("punch", 1);
+
+      // PARTICLES — more, and more colorful, as the combo grows.
+      const origin = node.pointer ?? node.rect.center;
+      const bursts = 1 + Math.min(4, Math.floor(combo / 3));
+      for (let i = 0; i < bursts; i++) {
+        const hue = (combo * 40 + i * 60) % 360;
+        node.spawn?.(burst(origin, hsl(hue, 0.85, 0.6)));
+      }
+      node.spawn?.(new Ring(origin, hsl((combo * 40) % 360, 0.9, 0.62), 30 + combo * 3, 0.5));
+
+      return { kind: "click", time: node.time ?? 0 };
+    }),
+  ],
+});
+
+// ── View ──────────────────────────────────────────────────────────────────────
+
+function view(document: ComboDocument) {
+  const rank = rankFor(document.combo);
+  return Stack("root", { gap: 18, pad: 56, align: "center" }, [
+
+    Label("title", { text: "Click fast!", size: 22, weight: 700, bright: true }),
+
+    Label("combo", {
+      text: document.combo > 1 ? `COMBO ×${document.combo}` : " ",
+      size: 18,
+      weight: 700,
+      bright: document.combo > 1,
+    }),
+
+    Label("rank", { text: rank || " ", size: 15, weight: 600, dim: true }),
+
+    ComboButton("button", { combo: document.combo, lastClickTime: document.lastClickTime }),
+
+    Label("stats", {
+      text: `clicks ${document.clicks}   ·   best combo ×${document.best}`,
+      size: 12, dim: true,
+    }),
+  ]);
+}
+
+// ── Mount ─────────────────────────────────────────────────────────────────────
+
+const canvas = document.getElementById("c") as HTMLCanvasElement;
+
+mount(canvas, {
+  init: { clicks: 0, combo: 0, best: 0, lastClickTime: -999 },
+  update,
+  view,
+  // The shake and glow pulse are functions of the clock, so keep the loop
+  // awake while the button is still cooling down after your last click.
+  ambient: (document, time) => time - document.lastClickTime < 2.5,
+});
+
+attachSourcePanel([{ name: "main.ts", code: mainSource }]);

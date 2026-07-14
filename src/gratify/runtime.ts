@@ -28,6 +28,12 @@ export interface AppSpec<TDoc, TIntent> {
   init: TDoc;
   update(doc: TDoc, intent: TIntent): TDoc;
   view(doc: TDoc): Element;
+  /** Optional: return true to keep the loop awake even when nothing is
+   *  animating through channels — needed for time-based motion (bounces,
+   *  earthquakes) that reads GNode.time, which the signature-based rest
+   *  detector cannot see. `time` is seconds since start (same clock as
+   *  GNode.time). Return false once it settles so the scene can sleep again. */
+  ambient?(doc: TDoc, time: number): boolean;
 }
 
 export interface RuntimeOpts {
@@ -92,6 +98,10 @@ export class Runtime<TDoc, TIntent> {
   /** Advance n deterministic frames (headless testing / golden frames). */
   step(n = 1, dt = 1 / 60) { for (let i = 0; i < n; i++) this.tick(dt); }
   stop() { this.stopped = true; }
+
+  /** Whether the scene is still animating (drove the last frame's decision to
+   *  schedule another). False means the loop has gone to sleep at rest. */
+  get animating(): boolean { return this.moving; }
 
   /** Screen → world (inverse viewport transform). */
   toWorld(p: Vec): Vec {
@@ -259,6 +269,7 @@ export class Runtime<TDoc, TIntent> {
 
     const sig = this.signature(this.root) + (this.gestureRoot ? this.signature(this.gestureRoot) : 0);
     this.moving = themeFading || this.fx.length > 0 || this.dirty || !!this.press || !!this.gesture ||
+      (this.app.ambient?.(this.doc, this.time) ?? false) ||
       Math.abs(sig - this.lastSig) > 0.002;
     this.lastSig = sig;
   }
@@ -300,6 +311,7 @@ export class Runtime<TDoc, TIntent> {
       anchor: (id) => this.anchorMap.get(id)?.pos,
       kick: (k, val = 1) => { inst.ch[k] = val; this.wake(); },
       view: { pan: this.viewport.pan, zoom: this.viewport.zoom, w: this.viewW, h: this.viewH },
+      time: this.time,
     };
   }
 

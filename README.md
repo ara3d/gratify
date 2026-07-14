@@ -10,38 +10,55 @@ Gratify renders to canvas, keeps a living animated scene in sync with your state
 
 ```ts
 import { mount, part, Press, Stack, Label, v } from "gratify";
+import type { Channels, Color, Tokens } from "gratify";
 
+// 1. State — plain immutable data that you own. It knows nothing about pixels.
 type Doc = { count: number };
 type Intent = { kind: "increment" };
 
-const update = (doc: Doc, _: Intent): Doc => ({ count: doc.count + 1 });
+function update(doc: Doc, intent: Intent): Doc {
+  return intent.kind === "increment" ? { count: doc.count + 1 } : doc;
+}
 
-const Button = part<{ label: string; press: Intent }>("button", {
+// 2. A widget ("part") — size, style, render, and behavior in one definition.
+//    The style/render split is deliberate: `style` decides what things look
+//    like, `render` just paints the result.
+type ButtonProps = { label: string; press: Intent };
+type ButtonStyle = { fill: Color; lift: number; text: Color };
+
+const Button = part<ButtonProps, ButtonStyle>("button", {
   size: (props, measure) => v(measure.text(props.label).x + 28, 34),
-  style: (tokens, ch) => ({
-    fill: tokens.mix(tokens.surface, tokens.accent, 0.2 + 0.3 * ch.hover + 0.4 * ch.press),
-    lift: 2 * ch.hover - 2 * ch.press,
+
+  // `channels.hover` and `channels.press` ease between 0 and 1 as the pointer
+  // interacts, so anything you compute from them animates for free.
+  style: (tokens: Tokens, channels: Channels): ButtonStyle => ({
+    fill: tokens.mix(tokens.surface, tokens.accent, 0.2 + 0.3 * channels.hover + 0.4 * channels.press),
+    lift: 2 * channels.hover - 2 * channels.press,
     text: tokens.text,
   }),
-  render: (node, paint, s) => {
-    paint.box(node.rect.raise(s.lift), 8, s.fill);
-    paint.label(node.props.label, node.rect.center, s.text);
+
+  render: (node, paint, style) => {
+    paint.box(node.rect.raise(style.lift), 8, style.fill);
+    paint.label(node.props.label, node.rect.center, style.text);
   },
+
   on: [Press((node) => node.props.press)],
 });
 
-mount(canvas, {
-  init: { count: 0 },
-  update,
-  view: (doc) =>
-    Stack("root", { gap: 12, pad: 24 }, [
-      Label("msg", { text: `Clicked ${doc.count} times` }),
-      Button("btn", { label: "Click me", press: { kind: "increment" } }),
-    ]),
-});
+// 3. The view — a pure function from state to an element tree.
+function view(doc: Doc) {
+  return Stack("root", { gap: 12, pad: 24 }, [
+    Label("message", { text: `Clicked ${doc.count} times` }),
+    Button("button", { label: "Click me", press: { kind: "increment" } }),
+  ]);
+}
+
+// 4. Mount onto a canvas.
+const canvas = document.getElementById("app") as HTMLCanvasElement;
+mount(canvas, { init: { count: 0 }, update, view });
 ```
 
-That's a complete app. Notice what you did **not** write: no event listener plumbing, no "add the label to the panel," no hover handler, no animation code. Yet at runtime the button breathes — it brightens and lifts on hover, sinks on press, and every state change glides instead of snapping.
+That's a complete app. Notice what you did **not** write: no event-listener plumbing, no "add the label to the panel", no hover handler, no animation code. Yet at runtime the button breathes — it brightens and lifts on hover, sinks on press, and every state change glides instead of snapping.
 
 ---
 
@@ -72,23 +89,28 @@ Gratify's composition rule fits in one sentence:
 
 > **Nothing is ever edited. Everything is wrapped or appended.**
 
-A widget ("part") is a bundle of small **facets**. Function facets (`measure`, `style`, `render`) extend by *wrapping* — you receive the original result and state only your delta. List facets (`channels`, `behaviors`, `adornments`) extend by *appending* — your entry is added, nothing replaced.
+A widget ("part") is a bundle of small **facets**. Function facets (`size`, `style`, `render`) extend by *wrapping* — you receive the original result and state only your delta. List facets (`channels`, interactors) extend by *appending* — your entry is added, nothing replaced.
 
 ```ts
-// A red debug outline on ANY widget. The widget never planned for this.
-const outlined = <P>(w: Part<P>) =>
-  w.mapRender((node, paint, base) => {
-    base(paint);
-    paint.box(node.rect, 0, none, red, 1);
-  });
+import { mapRender, derivePart, extendTheme, withExt, rgb } from "gratify";
+import type { PartExt } from "gratify";
 
-// Sparkle-on-hover, attachable to anything:
-const sparkle = <P>(w: Part<P>) =>
-  w.channel("fx/sparkle", (n) => n.ch.hover, ease(4))
-   .mapRender((n, paint, base) => { base(paint); paint.shimmer(n.rect, n.ch["fx/sparkle"]); });
+// An extension is an ordinary function: a part definition in, a wrapped one out.
+// `mapRender` gives you the original's paint call as `drawBase` so you can paint
+// under it, over it, or around it. This draws a red debug outline over ANY
+// widget — the widget never planned for it, and nothing about it needs to.
+const outlined: PartExt = mapRender((node, paint, style, drawBase) => {
+  drawBase();                                                    // the original…
+  paint.box(node.rect, 8, rgb(0, 0, 0, 0), rgb(255, 80, 90), 1.5); // …then on top
+});
+
+// The SAME extension value applies at three scopes — nothing else changes:
+const DebugButton = derivePart("debug-button", Button, outlined); // 1. bake into a new part
+extendTheme("dark", "button", outlined);                          // 2. every button, app-wide
+withExt(Button("save", saveProps), outlined);                     // 3. this one element only
 ```
 
-An extension is **just a function from part to part** — no plugin API, no registration, no base class. Chain them (`Button.pipe(sparkle, outlined)`), name them, ship them in libraries. And the same extension applies at three scopes: baked into a new named part, app-wide via a theme (*including widgets inside third-party code you can't edit*), or on one element at its use site.
+An extension is **just a function from part to part** — no plugin API, no registration, no base class. Name them, compose them, ship them in libraries. Scope 2 is the powerful one: a theme can reach widgets *inside third-party code you can't edit*, and it even reaches parts derived from the one you targeted. (See the [`extensions`](examples/extensions/) example for `mapStyle`, appended channels, and all three scopes running live.)
 
 Tooltips, selection, accessibility labels, undo, debug overlays, whole visual skins — every one is layerable onto a library that never anticipated it.
 
@@ -105,14 +127,17 @@ No CSS, no selectors, no specificity, no trigger precedence. State-dependent loo
 Behavior attaches as a list of **interactors** — reusable gesture recognizers parameterized by *what intent to emit*:
 
 ```ts
+import { Press, Drag1D, Keys, Focusable } from "gratify";
+
 on: [
-  Press((n) => ({ kind: "open", id: n.key })),
-  Drag({ to: (n, d) => ({ kind: "move", id: n.key, delta: d }) }),
-  Keys({ Enter: (n) => ({ kind: "open", id: n.key }) }),
+  Press((node) => ({ kind: "open", id: node.key })),
+  Drag1D({ axis: "x", to: (node, fraction) => ({ kind: "seek", to: fraction }) }),
+  Keys({ Enter: (node) => ({ kind: "open", id: node.key }) }),
+  Focusable(),   // clicking gives this part keyboard focus
 ]
 ```
 
-Interactors emit intents and set tags — they never touch your state or the scene. Hit-testing, capture, click-vs-drag disambiguation, and gesture arbitration live in the framework once, not in every widget's event spaghetti. Editor-grade gestures (marquee, wire-drag with magnetic snap, drag-with-guides) get bounded extra powers — private gesture state, read-only scene queries, and a live overlay view — so even the rubber-band preview is ordinary, themeable elements.
+Interactors emit intents and set tags — they never touch your state or the scene. Hit-testing, capture, click-vs-drag disambiguation, and keyboard routing live in the framework once, not in every widget's event spaghetti. Editor-grade gestures (marquee, wire-drag with magnetic snap, drag-with-guides) are built with `Gesture(...)`, which grants three bounded extra powers — private gesture state, a read-only scene query, and a live overlay view — so even the rubber-band preview is made of ordinary, themeable elements. (See the [`node-editor`](examples/node-editor/) example.)
 
 ### 6. Built for editor-grade UIs, not just forms
 
@@ -158,24 +183,31 @@ npm run test     # headless kernel tests (deterministic step())
 npm run check    # boundary check + typecheck
 ```
 
+Every example page shows its own source next to the running app, so you can read exactly the code that produced what you're looking at.
+
 - **Plan** — how we get from here to everything above: [`docs/plan.md`](docs/plan.md)
-- **Examples** — each one proves a README claim: [`examples/`](examples/)
+- **Examples** — each one proves a claim above: [`examples/`](examples/)
   - `counter` — the hello-world above, running verbatim
   - `todo` — keyed enter/exit/reflow, zero animation code
   - `toggles` — custom parts (spring toggle, drag slider) + live theme cross-fade
   - `undo` — `withUndo(app)` middleware; undo replays enter animations
-
   - `extensions` — wrap/append at all three scopes (definition, theme, use site)
-  - `keyboard-and-drag` — Focusable + Keys + a reorder gesture on one part
+  - `keyboard-and-drag` — `Focusable` + `Keys` + a reorder gesture on one part
   - `node-editor` — pan/zoom surface, anchored wires you can click and cut,
     magnetic wire-drag with live preview, and a Shift-drag slice gesture defined
     in one app-side file
+  - `borders` — none / single / double / sunken / raised; bevels that flip when pressed
+  - `combo-button` — click fast: heat, shake, glow, and particles build with your click rate
+  - `magnify` — a bouncing lens fisheye-magnifies the tiles beneath it
+  - `earthquake` — click to shake a brick skyline; a fully time-based animation
 
 **Status:** the kernel (two-clock loop, keyed reconcile, springs, channels,
 render-on-demand sleep), the `part()` facet model, layout with animated reflow,
-interactors (`Press`/`Drag1D`/`Keys`/`Focusable`/gestures with private state +
-scene query + overlay previews), the wrap/append extension algebra at three
-scopes, themes with cross-fade, anchors + connectors, viewport layers
-(world/overlay/screen), impulse channels, and undo middleware are all working —
-every claim above has a running example. Not yet: adornments, instance-local
-state, modal popups. Text input is deliberately out of scope for now.
+interactors (`Press` / `Drag1D` / `Keys` / `Focusable` / `Gesture` with private
+state + scene query + overlay previews), the wrap/append extension algebra at
+three scopes, themes with cross-fade, anchors + connectors, viewport layers
+(world/overlay/screen), impulse channels, an ever-rising `GNode.time` clock with
+an `ambient` keep-awake hook for time-based motion, and undo middleware are all
+working — every claim above has a running example. Not yet: adornments,
+instance-local state, modal popups. Text input is deliberately out of scope for
+now.

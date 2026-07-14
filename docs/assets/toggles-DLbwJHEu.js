@@ -1,4 +1,4 @@
-import{m as l,a as g,S as h,L as s,s as p,R as d,P as m,t as u,l as w}from"./source-panel-CJOI54oU.js";import{e as c,w as k}from"./extend-BDvzk-qJ.js";import{b as v}from"./effects-Cjsja_iU.js";import{T as i,S as r,C as a}from"./widgets-D6-7td_P.js";import{w as f}from"./widgets-DdaDB7gn.js";const S=`// ============================================================================
+import{m as l,a as g,S as h,L as s,s as p,R as d,P as m,t as u,n as w}from"./source-panel-D2qVZYc0.js";import{e as c,w as k}from"./extend-CkCKv_I_.js";import{b as v}from"./effects-BUBA72JG.js";import{T as i,S as r,C as a}from"./widgets-BpOaz7Bg.js";import{w as f}from"./widgets-DdaDB7gn.js";const S=`// ============================================================================
 // Example: toggles — custom widgets, springs, and a live theme cross-fade.
 //
 // What to look for when you run it:

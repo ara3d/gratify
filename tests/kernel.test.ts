@@ -321,3 +321,48 @@ describe("M3 editor tier (headless)", () => {
     expect(Math.abs(w.x - (200 - 40) / 1)).toBeLessThan(60);
   });
 });
+
+// ---- GNode.time + AppSpec.ambient (continuous / time-based motion) -----------
+describe("time and ambient", () => {
+  it("exposes an ever-rising GNode.time to channel targets", () => {
+    // A channel whose target IS the clock, chased fast enough to track it.
+    const Timed = part<Record<string, never>>("timed", {
+      size: () => v(10, 10),
+      channels: { clock: { target: (node) => node.time ?? 0, rate: 500 } },
+      render() {},
+    });
+    const rt = new Runtime(null, {
+      init: 0, update: (d: number) => d,
+      view: () => Stack("root", {}, [Timed("t", {})]),
+    }, { headless: true });
+    rt.step(30, 1 / 60);   // ~0.5s of frames
+    const clock = rt.root.children[0].ch.clock;
+    expect(clock).toBeGreaterThan(0.42);
+    expect(clock).toBeLessThan(0.58);
+  });
+
+  it("ambient keeps the loop awake while true, and settles when false", () => {
+    let keepAwake = true;
+    const rt = new Runtime<number, { kind: "noop" }>(null, {
+      init: 0, update: (d) => d,
+      view: () => Stack("root", {}, []),
+      ambient: () => keepAwake,
+    }, { headless: true });
+    rt.step(120);                       // let any startup motion settle
+    expect(rt.animating).toBe(true);    // still awake purely because ambient is true
+    keepAwake = false;
+    rt.step(2);
+    expect(rt.animating).toBe(false);   // nothing else moving → sleeps
+  });
+
+  it("ambient receives the current time", () => {
+    let seen = -1;
+    const rt = new Runtime<number, { kind: "noop" }>(null, {
+      init: 0, update: (d) => d,
+      view: () => Stack("root", {}, []),
+      ambient: (_doc, time) => { seen = time; return false; },
+    }, { headless: true });
+    rt.step(10, 1 / 60);
+    expect(seen).toBeGreaterThan(0.1);
+  });
+});
