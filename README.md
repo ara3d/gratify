@@ -2,39 +2,53 @@
 
 *Because your UI should be satisfying.*
 
-**Gratify is a TypeScript, canvas-rendered UI framework for building interfaces rich with micro-interactions — where every state change animates itself and every widget composes.**
+**Gratify is a TypeScript, canvas-rendered UI library for building interfaces rich with micro-interactions — where every state change animates itself and every widget composes.**
 
 [![npm](https://img.shields.io/npm/v/gratify.svg)](https://www.npmjs.com/package/gratify)
 [![license](https://img.shields.io/npm/l/gratify.svg)](https://github.com/ara3d/gratify/blob/main/LICENSE)
 
 ### ▶ [Try the live demo](https://ara3d.github.io/gratify/) · [Source on GitHub](https://github.com/ara3d/gratify) · [npm](https://www.npmjs.com/package/gratify)
 
+https://github.com/user-attachments/assets/f77ac0bb-bc53-486d-b51c-a19362b6ed0c
+
 ```bash
 npm install gratify
 ```
 
-https://github.com/user-attachments/assets/f77ac0bb-bc53-486d-b51c-a19362b6ed0c
+## About Gratify
 
-> **Status: experimental (v0.0.1, published on npm as [`gratify`](https://www.npmjs.com/package/gratify)).** The kernel, layout, interactors, extensions, themes, anchors, and adornments all work — every claim below has a [running example](https://ara3d.github.io/gratify/). Not built yet: instance-local state and modal popups (dropdowns); **text input is deliberately out of scope for now**, so this is for canvas-first UIs (dashboards, editors, HUDs), not text-heavy forms. Desktop-browser-first: keyboard focus and key routing work, but screen readers see only a `<canvas>`, and mobile/touch is untested. Expect API churn before 0.1.
+Gratify is an MVU (Model-View-Update) UI library for canvas-first UIs (e.g., dashboards, editors, HUDs, node graphs), not text-heavy forms. 
 
-It renders your whole UI to a single `<canvas>` (no DOM, no CSS), keeps a living, animated scene in sync with your state, and asks you to learn exactly two mechanisms: **pure functions over state** for *describing* the UI, and **channels** — named numbers that continuously chase their targets — for *changing* it. Hover glows, press dips, spring-loaded toggles, drag-with-momentum, enter/exit, theme cross-fades: the micro-interactions that normally take a pile of hand-written animation code are the default here, for free. Buttons, toggles, sliders, dashboards, node editors, timelines, game HUDs — the same primitives cover all of it.
+It is currently designed for desktop-browser-first: keyboard focus and key routing work, but screen readers see only a `<canvas>`, and mobile/touch is untested. 
+
+It renders your whole UI to a single `<canvas>` (no DOM, no CSS), keeps a living, animated scene in sync with your state, and asks you to learn exactly two mechanisms: 
+
+1. **pure functions over state** - for *describing* the UI
+2. **channels** — named numbers that continuously chase their targets — for *changing* it
+
+Hover glows, press dips, spring-loaded toggles, drag-with-momentum, enter/exit, theme cross-fades: the micro-interactions that normally take a pile of hand-written animation code are the default here, for free. Buttons, toggles, sliders, dashboards, node editors, timelines, game HUDs — the same primitives cover all of it.
 
 > You describe what the UI should be for the current state. Gratify keeps a retained, animated scene in sync with that description. Everything that changes, tweens.
+
+**Three words to keep straight:** a **part** is a reusable definition (`part("button")…`); an **element** is one placement of a part in the tree your `view` returns — a part plus props and a key; a **node** is the live, animated thing Gratify keeps on screen for each element — it holds the animation state and survives rebuilds. If you know React: **part** ≈ component, **element** ≈ `<Button/>`, **node** ≈ the mounted instance.
 
 ```ts
 import { mount, part, Stack, Label, v } from "gratify";
 
-// 1. State — plain immutable data that you own. It knows nothing about pixels.
+// 1. Model — plain immutable data that you own. It knows nothing about pixels.
 type Doc = { count: number };
 type Intent = { kind: "increment" };
 
+// 2. Update - how and when to transition from one model state to another 
 function update(doc: Doc, intent: Intent): Doc {
-  return intent.kind === "increment" ? { count: doc.count + 1 } : doc;
+  return intent.kind === "increment" 
+    ? { count: doc.count + 1 } 
+    : doc;
 }
 
-// 2. A widget ("part") — size, style, render, and behavior in one chained
-//    definition. The style/render split is deliberate: `style` decides what
-//    things look like, `render` just paints the result.
+// 3. A part — the reusable definition of a widget's size, style, render, and
+//    behavior, in one chained definition. The style/render split is deliberate:
+//    `style` decides what things look like, `render` just paints the result.
 const Button = part("button")
   .props<{ label: string; press: Intent }>()
   .size((props, measure) => v(measure.text(props.label).x + 28, 34))
@@ -54,7 +68,7 @@ const Button = part("button")
 
   .press((node) => node.props.press);
 
-// 3. The view — a pure function from state to an element tree.
+// 4. The view — a pure function from state to an element tree.
 function view(doc: Doc) {
   return Stack("root", { gap: 12, pad: 24 }, [
     Label("message", { text: `Clicked ${doc.count} times` }),
@@ -62,7 +76,7 @@ function view(doc: Doc) {
   ]);
 }
 
-// 4. Mount onto a canvas: <canvas id="app"></canvas> is the only HTML you need.
+// 5. Mount onto a canvas: <canvas id="app"></canvas> is the only HTML you need.
 const canvas = document.getElementById("app") as HTMLCanvasElement;
 mount(canvas, { init: { count: 0 }, update, view });
 ```
@@ -71,13 +85,13 @@ That — plus one `<canvas>` tag — is a complete app.
 
 Notice what you did **not** write: no event-listener plumbing, no "add the label to the panel", no hover handler, no animation code. Yet at runtime the button breathes — it brightens and lifts on hover, sinks on press, and every state change glides instead of snapping.
 
-(This is the builder form of `part()` — the house style. A spec-object form also exists; see [Architecture](#architecture).)
-
 ---
 
 ## Getting started
 
-Gratify is not yet published to npm — for now, clone and run:
+Gratify is published on npm as [gratify](https://www.npmjs.com/package/gratify).
+
+If you want to use this repository locally, after cloning run the following:
 
 ```bash
 git clone https://github.com/ara3d/gratify.git
@@ -90,24 +104,31 @@ npm run check    # boundary check + typecheck
 
 Every idea in this README has a running example. Rather than list them here, browse the **[live gallery ▶](https://ara3d.github.io/gratify/)** (or run `npm run dev`) — from the hello-world counter through a full pan/zoom node editor and a 15-control widget board. Each page shows its own source next to the running app, so you can read exactly the code that produced what you're looking at. Copy the example nearest your use case as a starting point.
 
-- **Plan** — the roadmap and design record: [`docs/plan.md`](docs/plan.md)
-
 ---
 
-## Architecture
+## How it Works
 
-Everything in the example above is one of four things. From the code you write down to the runtime that executes it:
+There are four key areas of the architecture:
 
-1. **State** — your `Doc`, your `update`, your `view`. Pure functions, plain data.
+1. **State Management** - your model (`Doc`), your `update` function, your `view` function
 2. **Parts** — widget definitions, built up facet by facet.
 3. **Channels** — the numbers that animate.
 4. **Extensions** — how anything gets customized.
 
-### State
+### State Management 
 
-Your app state is a plain immutable `Doc`. The only way it changes is a typed `Intent` passing through one pure function, `update(doc, intent) → doc`. The UI is another pure function, `view(doc) → Element tree`. Elements are cheap descriptions, rebuilt from scratch on every state change — the framework matches them by key against the widgets already on screen, so a widget that survives a rebuild keeps its animation state and knows where it was.
+Your app state is a plain immutable type of your choosing (we use `Doc` by convention). 
+The only way it changes is a typed `Intent` object (again of your choosing) passing through one pure function:
 
-That's the whole state story. There is no `useState`, no binding, no hidden framework state.
+> ```update(doc: Doc, intent: Intent): Doc```
+
+Your job is to model, in your Doc, the state the UI represents, and to write the `update` function that moves from one state to the next.
+
+The UI is created on each frame by another pure function: 
+
+> ```view(doc: Doc): Element```
+
+`view` returns a tree of **elements** — each element is a part plus its props and a key. It is called on every state change, and the framework matches elements by key against the **nodes** already on screen, so a node that survives a rebuild keeps its animation state and knows where it was.
 
 ### Parts
 
@@ -152,7 +173,7 @@ Every geometry facet has a sensible default (no size means "union of my children
 
 ### Channels
 
-Channels are the animation substrate: named numbers on each widget that continuously chase targets. `hover`, `press`, `focus`, `drag`, `enter`, and `exit` come free on every part; a `channels` facet adds custom ones, chased by a spring (momentum, overshoot), an ease rate, or a decaying impulse.
+Channels are the animation substrate: named numbers on each node that continuously chase targets. `hover`, `press`, `focus`, `drag`, `enter`, and `exit` come free on every part; a `channels` facet adds custom ones, chased by a spring (momentum, overshoot), an ease rate, or a decaying impulse.
 
 The key move is that *there is no animation API*. You never start, stop, or sequence a tween. A style function computes values from channels; when state changes move a channel's target, everything computed from it glides to the new value. Motion is a side effect of describing where things should be.
 
@@ -199,7 +220,7 @@ Gratify's composition rule fits in one sentence:
 
 > **Nothing is ever edited. Everything is wrapped or appended.**
 
-A widget ("part") is a bundle of small **facets**. Function facets (`size`, `style`, `render`) extend by *wrapping* — you receive the original result and state only your delta. List facets (`channels`, interactors) extend by *appending* — your entry is added, nothing replaced.
+A **part** is a bundle of small **facets**. Function facets (`size`, `style`, `render`) extend by *wrapping* — you receive the original result and state only your delta. List facets (`channels`, interactors) extend by *appending* — your entry is added, nothing replaced.
 
 ```ts
 import { mapRender, derivePart, extendTheme, withExt, rgb } from "gratify";
@@ -254,7 +275,7 @@ Interactors emit intents and set tags — they never touch your state or the sce
 Gratify grew up building a node editor, so the hard problems most frameworks punt on are first-class:
 
 - **Anchors & connectors** — widgets publish named world-space points; wires and guides are ordinary keyed elements whose geometry references them. Delete an edge and the wire *fades out*. Click a wire to select it. Theme all wires in one line.
-- **The surface is a widget too** — the canvas grid, pan/zoom, marquee, HUD, and post-effects are just facets on the root, reachable by every extension mechanism.
+- **The surface is a part too** — the canvas grid, pan/zoom, marquee, HUD, and post-effects are just facets on the root, reachable by every extension mechanism.
 - **Pan/zoom-aware everything** — gestures operate correctly under a viewport transform, and elements live on a `world` / `overlay` / `screen` layer so a HUD stays put while the content pans.
 - **Time as a first-class input** — the `GNode.time` clock drives continuous motion (pulses, tremors, orbiting cameras), and an `ambient` hook keeps the loop awake only while such motion is running, then lets it sleep again.
 
@@ -264,23 +285,6 @@ Gratify grew up building a node editor, so the hard problems most frameworks pun
 - **Cheap by construction.** State changes rebuild a cheap description at human interaction rates; every frame just steps numbers toward targets and paints. When the scene settles, the loop **stops scheduling animation frames** until input arrives.
 - **A kernel you can read.** The core — reconcile, springs, channels, the loop — is a few hundred lines. There is no magic to be surprised by at 2 a.m.
 - **Deterministic stepping** built in (`step(n, dt)`) for headless testing and golden images.
-
----
-
-## The cheat sheet
-
-| Concept | React | WPF | Gratify |
-|---|---|---|---|
-| App state | hooks / Redux | ViewModel + binding | one Doc + `update(doc, intent)` |
-| State-dependent look | className switches | Triggers / VSM | channel blends in style functions |
-| Animation | CSS / Framer / react-spring | Storyboards | channels chasing targets (automatic) |
-| Enter/exit | AnimatePresence | Loaded/Unloaded storyboards | automatic `enter`/`exit` channels |
-| Custom widget | component + CSS + handlers | Control + Template + Style | one `part()` definition |
-| Customizing others' widgets | fork it | retemplate it | wrap a facet, at any scope |
-| Gestures | handler soup | routed events + capture | interactor values |
-| Theming | context + CSS vars | ResourceDictionary swap | `setTheme` — cross-fades free |
-
-The through-line: where React and WPF grew a *separate subsystem* per row, Gratify answers nearly every row with the same two mechanisms. That's what "composable" means here — not a feature for everything, but a few primitives that combine to cover the table.
 
 ---
 
@@ -299,7 +303,7 @@ Gratify combines three ideas that usually travel separately: the **MVU architect
 ### The medium — self-painted / canvas UI (no DOM)
 
 - [**Flutter**](https://flutter.dev) — the closest large project: a retained widget tree painted by its own engine (Skia), "everything is a widget." Differs in that widgets are *stateful*, not MVU, and there is no automatic animation channel.
-- [**Dear ImGui**](https://github.com/ocornut/imgui) and [**egui**](https://github.com/emilk/egui) (Rust) — GPU/canvas GUIs, but *immediate mode* (rebuilt every frame, no retained scene) — the opposite pole from Gratify's keyed, retained instances.
+- [**Dear ImGui**](https://github.com/ocornut/imgui) and [**egui**](https://github.com/emilk/egui) (Rust) — GPU/canvas GUIs, but *immediate mode* (rebuilt every frame, no retained scene) — the opposite pole from Gratify's keyed, retained nodes.
 - [**Makepad**](https://github.com/makepad/makepad) (Rust) — GPU-rendered, shader-styled, live-designed UI; spiritually near Gratify's canvas-plus-juice ethos.
 - [**PixiJS**](https://pixijs.com) and [**Konva**](https://konvajs.org) — retained canvas scene-graphs, but with no application architecture; you would build the MVU layer on top.
 
@@ -312,34 +316,30 @@ Gratify combines three ideas that usually travel separately: the **MVU architect
 
 **The nearest single neighbors:** Flutter (retained, self-painted widget tree), Rive (animation-first retained canvas), Elm (the architectural twin), and Makepad (canvas + GPU + juice). Each shares one or two axes; none ships the exact combination of *MVU + retained canvas + springs-by-default*. The shortest honest description is "Flutter, if it were Elm with automatic springs."
 
----
+### Concept map from React and WPF to Gratify
 
-## Related projects
+For people with a familiarity with React and WPF, here are some of the concepts 
+and how they map. 
 
-Gratify comes out of the [**Ara 3D**](https://github.com/ara3d) ecosystem and a lineage of value-oriented, immutable design:
+| Concept | React | WPF | Gratify |
+|---|---|---|---|
+| App state | hooks / Redux | ViewModel + binding | one Doc + `update(doc, intent)` |
+| State-dependent look | className switches | Triggers / VSM | channel blends in style functions |
+| Animation | CSS / Framer / react-spring | Storyboards | channels chasing targets (automatic) |
+| Enter/exit | AnimatePresence | Loaded/Unloaded storyboards | automatic `enter`/`exit` channels |
+| Custom widget | component + CSS + handlers | Control + Template + Style | one `part()` definition |
+| Customizing others' widgets | fork it | retemplate it | wrap a facet, at any scope |
+| Gestures | handler soup | routed events + capture | interactor values |
+| Theming | context + CSS vars | ResourceDictionary swap | `setTheme` — cross-fades free |
 
-- [**Plato**](https://github.com/cdiggins/plato) — a pure, functional programming language by the same author. Its value-first, immutable philosophy is the intellectual root of Gratify's "pure `view(doc)`, no hidden state" model.
-- [**Ara 3D SDK**](https://github.com/ara3d/ara3d-sdk) — the .NET toolkit for high-performance 3D and AEC/BIM data that this work supports.
-- [**Plato.Geometry**](https://github.com/ara3d/Plato.Geometry) — a cross-platform geometry library generated from Plato.
-- **Kea** *(predecessor)* — the earlier canvas-UI experiment Gratify distilled its layering model from; **PeacockV2** *(planned)* is a C# sibling that will apply the same architecture on immutable records.
+The through-line: where React and WPF grew a *separate subsystem* per row, Gratify answers nearly every row with the same two mechanisms. That's what "composable" means here — not a feature for everything, but a few primitives that combine to cover the table.
 
-### Writing Gratify code (humans and AI agents)
 
-If you're driving an agent (Cursor, Claude Code, …) to write Gratify code, point it at the condensed **skill file** first: [`.cursor/skills/gratify/SKILL.md`](.cursor/skills/gratify/SKILL.md) — the house rules, the facet cheatsheet, and a do/don't list. The short version, for anyone:
 
-- **Import from the `"gratify"` barrel only** — never reach into `src/gratify/*` from an app.
-- **Keep `update` pure and put state in the Doc.** The UI is `view(doc)`; intents are the only way to change anything.
-- **Customize by wrapping or appending, never by editing a part in place** — `mapStyle` / `mapRender` for looks, `addChannels` / `addOn` for behavior.
-- **Copy the nearest [`examples/`](examples/) file** rather than inventing APIs. Modal popups, instance-local state, and text input are *not built yet* — don't fake them.
+## Status: Beta
 
-**Status:** the kernel (two-clock loop, keyed reconcile, springs, channels,
-render-on-demand sleep), the `part()` facet model, layout with animated reflow,
-interactors (`Press` / `Drag1D` / `Keys` / `Focusable` / `Gesture` with private
-state + scene query + overlay previews), the wrap/append extension algebra at
-three scopes, themes with cross-fade, anchors + connectors, viewport layers
-(world/overlay/screen), impulse channels, an ever-rising `GNode.time` clock with
-an `ambient` keep-awake hook for time-based motion, anchored adornments (overlay
-elements with their own interactors, applied to any widget by composition), and
-undo middleware are all working — every claim above has a running example. Not
-yet: instance-local state and modal popups (dropdowns). Text input is
-deliberately out of scope for now.
+The kernel, layout, interactors, extensions, themes, anchors, and adornments all work — every claim in this README has a [running example](https://ara3d.github.io/gratify/).
+
+Not built yet: instance-local (per-node) UI state, and modal popups such as dropdowns.
+
+**Text input is deliberately out of scope for now**, so Gratify suits canvas-first UIs — dashboards, editors, HUDs, node graphs — rather than text-heavy forms.

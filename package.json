@@ -1,6 +1,6 @@
 {
   "name": "gratify",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A Typescript canvas-rendered UI framework for satisfying micro-interactions.",
   "type": "module",
   "license": "MIT",

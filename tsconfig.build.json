@@ -1,0 +1,16 @@
+{
+  // Library build: compile the framework source to dist/ with type declarations.
+  // Separate from the root tsconfig (which is noEmit and includes examples/tests).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src/gratify",
+    "paths": {}
+  },
+  "include": ["src/gratify"],
+  "exclude": ["examples", "tests"]
+}
