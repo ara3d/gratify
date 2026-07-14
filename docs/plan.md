@@ -1,6 +1,15 @@
 # Gratify — High-Level Implementation Plan
 
-*Written 2026-07-13. This plan describes how to get from an empty repository to
+*Written 2026-07-13. Status 2026-07-14: **M0, M1, M2 complete; M3 core
+complete** — surface-as-part (grid/Pan/Keys), anchors + wire connectors,
+gestures with state/query/overlay-view, impulse channels, viewport layers, and
+the flagship node-editor example whose slice gesture is one app-side file with
+zero framework edits (the acceptance test Kea never passed). Examples:
+counter, todo, toggles, undo, extensions, keyboard-and-drag, node-editor.
+Remaining from M3: local state routing, modal adornments, `adorn` facet,
+dashboard + dropdown examples. M4 not started.*
+
+*This plan describes how to get from an empty repository to
 the framework the [README](../README.md) promises. The README is the spec: every
 claim in it must eventually be backed by running code, and the plan is organized
 so that the proof arrives as early as possible — as a growing gallery of small,

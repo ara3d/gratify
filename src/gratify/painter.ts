@@ -4,7 +4,7 @@
 // deterministic stepping without a DOM).
 // ============================================================================
 
-import { Color, css, Rect, Vec } from "./core";
+import { Color, css, Rect, Vec, wireCtrl } from "./core";
 
 export interface LabelOpts {
   size?: number;                       // px, default 13
@@ -32,6 +32,10 @@ export interface Painter {
   alpha(a: number): void;
   scaleAt(cx: number, cy: number, s: number): void;
   screen(dpr: number): void;
+  /** Set the world transform (viewport pan/zoom). */
+  view(pan: Vec, zoom: number, dpr: number): void;
+  /** Cubic bezier connector with horizontal tangents. */
+  wire(a: Vec, b: Vec, c: Color, lw: number): void;
 }
 
 const SANS = `"Segoe UI", system-ui, sans-serif`;
@@ -56,6 +60,14 @@ export class CanvasPainter implements Painter {
     void w; void h;
   }
   screen(dpr: number) { this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+  view(pan: Vec, zoom: number, dpr: number) {
+    this.ctx.setTransform(zoom * dpr, 0, 0, zoom * dpr, pan.x * dpr, pan.y * dpr);
+  }
+  wire(a: Vec, b: Vec, col: Color, lw: number) {
+    const c = this.ctx, [c1, c2] = wireCtrl(a, b);
+    c.beginPath(); c.moveTo(a.x, a.y); c.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y);
+    c.strokeStyle = css(col); c.lineWidth = lw; c.lineCap = "round"; c.stroke();
+  }
   push() { this.ctx.save(); }
   pop() { this.ctx.restore(); }
   alpha(a: number) { this.ctx.globalAlpha *= a; }
@@ -108,7 +120,7 @@ export class CanvasPainter implements Painter {
 /** Headless painter: draws nothing, measures approximately. For tests. */
 export class NullPainter implements Painter {
   measure: Measure = { text: (s, size = 13) => ({ x: s.length * size * 0.55, y: size * 1.3 }) };
-  clear() {} box() {} label() {} dot() {} ring() {} line() {}
+  clear() {} box() {} label() {} dot() {} ring() {} line() {} wire() {}
   glow(_c: Color, _b: number, draw: () => void) { draw(); }
-  push() {} pop() {} alpha() {} scaleAt() {} screen() {}
+  push() {} pop() {} alpha() {} scaleAt() {} screen() {} view() {}
 }

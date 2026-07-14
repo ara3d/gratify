@@ -165,9 +165,17 @@ npm run check    # boundary check + typecheck
   - `toggles` — custom parts (spring toggle, drag slider) + live theme cross-fade
   - `undo` — `withUndo(app)` middleware; undo replays enter animations
 
-**Status:** early. The kernel (two-clock loop, keyed reconcile, springs, channels,
-render-on-demand sleep), the `part()` facet model, `Stack`/`Row` layout with
-animated reflow, `Press`/`Drag1D` interactors, themes with cross-fade, and undo
-middleware are working — see the examples. The wrap/append extension algebra,
-gesture views, anchors/connectors, adornments, and local state are designed
-(see the plan) and land next. Text input is deliberately out of scope for now.
+  - `extensions` — wrap/append at all three scopes (definition, theme, use site)
+  - `keyboard-and-drag` — Focusable + Keys + a reorder gesture on one part
+  - `node-editor` — pan/zoom surface, anchored wires you can click and cut,
+    magnetic wire-drag with live preview, and a Shift-drag slice gesture defined
+    in one app-side file
+
+**Status:** the kernel (two-clock loop, keyed reconcile, springs, channels,
+render-on-demand sleep), the `part()` facet model, layout with animated reflow,
+interactors (`Press`/`Drag1D`/`Keys`/`Focusable`/gestures with private state +
+scene query + overlay previews), the wrap/append extension algebra at three
+scopes, themes with cross-fade, anchors + connectors, viewport layers
+(world/overlay/screen), impulse channels, and undo middleware are all working —
+every claim above has a running example. Not yet: adornments, instance-local
+state, modal popups. Text input is deliberately out of scope for now.

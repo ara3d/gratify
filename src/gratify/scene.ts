@@ -17,6 +17,9 @@ export interface Element {
   states?: Record<string, boolean>;
   /** Use-site extensions (scope 3) — applied last, wins over theme/definition. */
   exts?: unknown[];
+  /** Coordinate layer: world (viewport-transformed, default), overlay (world
+   *  coords, drawn above all content), screen (untransformed HUD). Inherited. */
+  layer?: "world" | "overlay" | "screen";
 }
 
 export class Instance {

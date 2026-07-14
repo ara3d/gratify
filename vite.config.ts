@@ -16,6 +16,8 @@ export default defineConfig({
         toggles: resolve(__dirname, "examples/toggles/index.html"),
         undo: resolve(__dirname, "examples/undo/index.html"),
         extensions: resolve(__dirname, "examples/extensions/index.html"),
+        "keyboard-and-drag": resolve(__dirname, "examples/keyboard-and-drag/index.html"),
+        "node-editor": resolve(__dirname, "examples/node-editor/index.html"),
       },
     },
   },

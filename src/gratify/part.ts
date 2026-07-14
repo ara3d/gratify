@@ -21,19 +21,35 @@ export interface GNode<P> {
   rect: Rect;
   ch: Channels;
   states: Set<string>;
-  /** Last pointer position (canvas coords), if any. */
+  /** Last pointer position (world coords for world-layer parts), if any. */
   pointer?: Vec;
   /** Spawn a transient effect (README §"one-shot juice"). */
   spawn?(fx: unknown): void;
+  /** Resolve a published anchor to its world position (connectors, §5b). */
+  anchor?(id: string): Vec | undefined;
+  /** Kick an impulse channel (§5d) — the one sanctioned imperative touch. */
+  kick?(channel: string, value?: number): void;
+  /** Viewport of the mounted scene: pan/zoom + css pixel size. */
+  view?: { pan: Vec; zoom: number; w: number; h: number };
 }
 
 export interface ChannelSpec<P> {
-  /** Target the value chases, re-derived every frame from the node. */
-  target(node: GNode<P>): number;
+  /** Target the value chases, re-derived every frame from the node.
+   *  Omit for impulse channels (decay). */
+  target?(node: GNode<P>): number;
   /** Spring (momentum, overshoot) — positions, travel, knobs. */
   spring?: { stiffness: number; damping: number };
   /** Exponential approach rate (no overshoot) — colors, glow. Default 10. */
   rate?: number;
+  /** Impulse channel: no target — kick() sets it, it decays to 0 at this rate. */
+  decay?: number;
+}
+
+/** What a container's place() sees of each child. */
+export interface ChildInfo {
+  key: string;
+  size: Vec;
+  props: unknown;
 }
 
 export interface PartSpec<P, S = Record<string, unknown>> {
@@ -42,7 +58,11 @@ export interface PartSpec<P, S = Record<string, unknown>> {
   /** Container: own size from children's sizes. */
   measure?(props: P, childSizes: Vec[], m: Measure): Vec;
   /** Container: place children (absolute rects) inside own rect. */
-  place?(props: P, rect: Rect, childSizes: Vec[]): Rect[];
+  place?(props: P, rect: Rect, kids: ChildInfo[]): Rect[];
+  /** Published world-space anchor points (connectors resolve through these). */
+  anchors?(node: GNode<P>): { id: string; pos: Vec; meta?: unknown }[];
+  /** Custom hit test (e.g. distance-to-curve for wires). Default: rect. */
+  hit?(node: GNode<P>, p: Vec): boolean;
   /** Extra animated channels beyond the automatic ones. */
   channels?: Record<string, ChannelSpec<P>>;
   /** tokens + channels (+ props) → a flat record of resolved visual values. */
