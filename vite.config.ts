@@ -29,6 +29,7 @@ export default defineConfig({
         earthquake: resolve(__dirname, "examples/earthquake/index.html"),
         "widget-board": resolve(__dirname, "examples/widget-board/index.html"),
         composites: resolve(__dirname, "examples/composites/index.html"),
+        "split-pane": resolve(__dirname, "examples/split-pane/index.html"),
         adornments: resolve(__dirname, "examples/adornments/index.html"),
       },
     },
