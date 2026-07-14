@@ -30,6 +30,7 @@ export default defineConfig({
         "widget-board": resolve(__dirname, "examples/widget-board/index.html"),
         composites: resolve(__dirname, "examples/composites/index.html"),
         "split-pane": resolve(__dirname, "examples/split-pane/index.html"),
+        "juice-gallery": resolve(__dirname, "examples/juice-gallery/index.html"),
         adornments: resolve(__dirname, "examples/adornments/index.html"),
       },
     },
