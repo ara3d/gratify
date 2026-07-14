@@ -21,6 +21,10 @@ export interface GNode<P> {
   rect: Rect;
   ch: Channels;
   states: Set<string>;
+  /** Last pointer position (canvas coords), if any. */
+  pointer?: Vec;
+  /** Spawn a transient effect (README §"one-shot juice"). */
+  spawn?(fx: unknown): void;
 }
 
 export interface ChannelSpec<P> {
@@ -51,6 +55,9 @@ export interface PartSpec<P, S = Record<string, unknown>> {
 
 export interface PartDef<P, S = Record<string, unknown>> extends PartSpec<P, S> {
   name: string;
+  /** Base parts this was derived from (derivePart) — lets theme extensions
+   *  targeting a base reach its derivatives. */
+  ancestors?: string[];
 }
 
 export interface PartCtor<P> {
@@ -60,7 +67,7 @@ export interface PartCtor<P> {
 
 /** Define a part. Returns its element constructor: (key, props, children?) → Element. */
 export function part<P, S = Record<string, unknown>>(name: string, spec: PartSpec<P, S>): PartCtor<P> {
-  const def: PartDef<P, S> = { name, ...spec };
+  const def: PartDef<P, S> = { ...spec, name };   // name last: spec may be a spread def
   const ctor = ((key: string, props: P, children?: Element[]): Element => ({
     key,
     part: def as unknown as PartDef<unknown, unknown>,

@@ -9,6 +9,7 @@ export * from "./part";
 export * from "./scene";
 export * from "./interact";
 export * from "./builtins";
+export * from "./extend";
 export * from "./fx";
 export * from "./middleware";
 export * from "./runtime";

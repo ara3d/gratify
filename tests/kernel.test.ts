@@ -129,3 +129,72 @@ describe("headless runtime", () => {
     expect(Math.abs(rt.root.children[0].rect.y - 0)).toBeLessThan(1);
   });
 });
+
+// ---- extension algebra (M2) -------------------------------------------------
+import {
+  addChannels, addOn, derivePart, extendTheme, clearThemeExt, mapSize, mapStyle,
+  Press, withExt,
+} from "../src/gratify";
+
+describe("extension algebra", () => {
+  it("mapStyle wraps: base result flows into the delta", () => {
+    const Base = part<{ x: number }, { a: number; b: number }>("mb", {
+      style: () => ({ a: 1, b: 2 }),
+      render() {},
+    });
+    const ext = mapStyle<{ a: number; b: number }>((_t, _c, _p, base) => ({ ...base, b: base.b * 10 }));
+    const def = ext(Base.def as never) as typeof Base.def;
+    const out = def.style!(null as never, {}, { x: 0 }) as { a: number; b: number };
+    expect(out).toEqual({ a: 1, b: 20 });
+  });
+
+  it("mapSize wraps; addOn/addChannels append", () => {
+    const Base = part<Record<string, never>>("ms", { size: () => v(10, 10), render() {}, on: [Press(() => null)] });
+    const def = mapSize((_p, _m, b) => v(b.x, Math.max(b.y, 44)))(
+      addOn(Press(() => null))(addChannels({ "fx/k": { target: () => 1 } })(Base.def as never)),
+    ) as typeof Base.def;
+    expect(def.size!({}, { text: () => v(0, 0) }).y).toBe(44);
+    expect(def.on!.length).toBe(2);
+    expect(Object.keys(def.channels!)).toContain("fx/k");
+  });
+
+  it("derivePart records ancestry; theme extensions reach derivatives", () => {
+    const Base = part<Record<string, never>, { n: number }>("tb", { style: () => ({ n: 1 }), render() {} });
+    const Derived = derivePart("tb-fancy", Base);
+    expect(Derived.def.ancestors).toContain("tb");
+
+    extendTheme("dark", "tb", mapStyle<{ n: number }>((_t, _c, _p, b) => ({ n: b.n + 100 })) as never);
+    const rt = new Runtime(null, {
+      init: 0,
+      update: (d: number) => d,
+      view: () => Stack("root", {}, [Base("x", {}), Derived("y", {})]),
+    }, { headless: true });
+    rt.step(2);
+    const styleOf = (i: number) => {
+      const inst = rt.root.children[i];
+      const eff = (rt as unknown as { eff(x: unknown): { style(t: unknown, c: unknown, p: unknown): unknown } }).eff(inst);
+      return eff.style(null, {}, {}) as { n: number };
+    };
+    expect(styleOf(0).n).toBe(101);   // base part themed
+    expect(styleOf(1).n).toBe(101);   // derivative reached via ancestry
+    clearThemeExt("dark", "tb");
+    expect(styleOf(0).n).toBe(1);     // cache invalidated by themeVersion bump
+  });
+
+  it("use-site exts apply to that element only; all press behaviors run", () => {
+    let hits = 0;
+    const Base = part<Record<string, never>>("us", { size: () => v(10, 10), render() {}, on: [Press(() => { hits++; return null; })] });
+    const extra = addOn(Press(() => { hits += 10; return null; }));
+    const rt = new Runtime(null, {
+      init: 0,
+      update: (d: number) => d,
+      view: () => Stack("root", {}, [withExt(Base("a", {}), extra), Base("b", {})]),
+    }, { headless: true });
+    rt.step(2);
+    const effA = (rt as unknown as { eff(x: unknown): { on?: unknown[] } }).eff(rt.root.children[0]);
+    const effB = (rt as unknown as { eff(x: unknown): { on?: unknown[] } }).eff(rt.root.children[1]);
+    expect(effA.on!.length).toBe(2);
+    expect(effB.on!.length).toBe(1);
+    void hits;
+  });
+});

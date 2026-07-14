@@ -14,8 +14,10 @@ import { CanvasPainter, NullPainter, Painter } from "./painter";
 import { Element, Instance, reconcile } from "./scene";
 import { GNode, PartDef } from "./part";
 import { axisFraction, Interactor } from "./interact";
-import { tickTheme, tokens } from "./theme";
+import { activeThemeExts, themeVersion, tickTheme, tokens } from "./theme";
 import { Fx } from "./fx";
+
+type AnyDef = PartDef<unknown, unknown>;
 
 export interface AppSpec<TDoc, TIntent> {
   init: TDoc;
@@ -63,6 +65,18 @@ export class Runtime<TDoc, TIntent> {
     if (canvas && !opts.headless) this.attach(canvas);
   }
 
+  // ---- effective part definitions (layering: definition → theme → use site) --
+  private effCache = new WeakMap<Instance, { ver: number; el: Element; def: AnyDef }>();
+  private eff(inst: Instance): AnyDef {
+    const hit = this.effCache.get(inst);
+    if (hit && hit.ver === themeVersion && hit.el === inst.el) return hit.def;
+    let def = inst.part as AnyDef;
+    for (const e of activeThemeExts(def.name, def.ancestors)) def = e(def) as AnyDef;
+    for (const e of inst.el.exts ?? []) def = (e as (d: AnyDef) => AnyDef)(def);
+    this.effCache.set(inst, { ver: themeVersion, el: inst.el, def });
+    return def;
+  }
+
   // ---- public --------------------------------------------------------------
   dispatch = (i: TIntent) => { this.doc = this.app.update(this.doc, i); this.dirty = true; this.wake(); };
   spawnFx(f: Fx) { this.fx.push(f); this.wake(); }
@@ -93,7 +107,7 @@ export class Runtime<TDoc, TIntent> {
       this.pointer = p;
       const hit = this.interactiveHit(this.root, p);
       if (hit) {
-        const drag = hit.part.on!.find((i): i is Extract<Interactor<unknown>, { kind: "drag1d" }> => i.kind === "drag1d");
+        const drag = this.eff(hit).on!.find((i): i is Extract<Interactor<unknown>, { kind: "drag1d" }> => i.kind === "drag1d");
         this.press = { inst: hit, x0: p.x, y0: p.y, moved: false, drag };
         if (drag) this.dispatchDrag(hit, drag, p);
         canvas.setPointerCapture(ev.pointerId);
@@ -114,10 +128,13 @@ export class Runtime<TDoc, TIntent> {
       const ps = this.press;
       this.press = null;
       if (ps && !ps.drag && !ps.moved && ps.inst.rect.contains(p)) {
-        const pressI = ps.inst.part.on!.find((i) => i.kind === "press");
-        if (pressI && pressI.kind === "press") {
-          const intent = pressI.to(this.nodeOf(ps.inst));
-          if (intent != null) this.dispatch(intent as TIntent);
+        // ALL appended press behaviors run (layering rule); null intents are
+        // effects-only handlers.
+        for (const it of this.eff(ps.inst).on ?? []) {
+          if (it.kind === "press") {
+            const intent = it.to(this.nodeOf(ps.inst));
+            if (intent != null) this.dispatch(intent as TIntent);
+          }
         }
       }
       this.wake();
@@ -181,7 +198,7 @@ export class Runtime<TDoc, TIntent> {
   private sizes = new Map<Instance, Vec>();
 
   private measureInst(inst: Instance): Vec {
-    const part = inst.part;
+    const part = this.eff(inst);
     const kidSizes = inst.children.map((c) => this.measureInst(c));
     let s: Vec;
     if (part.size) s = part.size(inst.props, this.painter.measure);
@@ -193,9 +210,10 @@ export class Runtime<TDoc, TIntent> {
 
   private placeInst(inst: Instance, target: Rect) {
     inst.target = target;
-    if (inst.part.place && inst.children.length) {
+    const part = this.eff(inst);
+    if (part.place && inst.children.length) {
       const kidSizes = inst.children.map((c) => this.sizes.get(c)!);
-      const rects = inst.part.place(inst.props, target, kidSizes);
+      const rects = part.place(inst.props, target, kidSizes);
       inst.children.forEach((c, i) => this.placeInst(c, rects[i]));
     } else {
       for (const c of inst.children) this.placeInst(c, new Rect(target.x, target.y, this.sizes.get(c)?.x ?? 0, this.sizes.get(c)?.y ?? 0));
@@ -227,7 +245,11 @@ export class Runtime<TDoc, TIntent> {
 
   // ---- channels: targets re-derived every frame, values chase ---------------
   private nodeOf(inst: Instance): GNode<unknown> {
-    return { key: inst.key, props: inst.props, rect: inst.rect, ch: inst.ch, states: inst.states };
+    return {
+      key: inst.key, props: inst.props, rect: inst.rect, ch: inst.ch, states: inst.states,
+      pointer: this.pointer ?? undefined,
+      spawn: (f) => this.spawnFx(f as Fx),
+    };
   }
 
   private hoverInst(): Instance | null {
@@ -239,14 +261,15 @@ export class Runtime<TDoc, TIntent> {
       const hit = this.renderHit(inst.children[i], p);
       if (hit) return hit;
     }
-    if ((inst.part.render || inst.part.on?.length) && inst.rect.contains(p)) return inst;
+    const part = this.eff(inst);
+    if ((part.render || part.on?.length) && inst.rect.contains(p)) return inst;
     return null;
   }
 
   /** Nearest self-or-ancestor of the hit with interactors attached. */
   private interactiveHit(root: Instance, p: Vec): Instance | null {
     let cur: Instance | null | undefined = this.renderHit(root, p);
-    while (cur && !cur.part.on?.length) cur = cur.parent;
+    while (cur && !this.eff(cur).on?.length) cur = cur.parent;
     return cur ?? null;
   }
 
@@ -263,8 +286,8 @@ export class Runtime<TDoc, TIntent> {
     for (const k of inst.stateKeys)
       inst.ch[k] = approach(inst.ch[k] || 0, inst.states.has(k) ? 1 : 0, 10, dt);
 
-    // part-declared channels
-    const decls = inst.part.channels;
+    // part-declared channels (incl. extension-appended ones)
+    const decls = this.eff(inst).channels;
     if (decls) {
       const node = this.nodeOf(inst);
       for (const k in decls) {
@@ -319,7 +342,7 @@ export class Runtime<TDoc, TIntent> {
     if (en < 1) { p.alpha(en); p.scaleAt(inst.rect.center.x, inst.rect.center.y, 0.8 + 0.2 * easeOutBack(en)); }
     if (ex > 0) { p.alpha(1 - ex); p.scaleAt(inst.rect.center.x, inst.rect.center.y, 1 - 0.25 * ex); }
 
-    const part = inst.part as PartDef<unknown, unknown>;
+    const part = this.eff(inst);
     if (part.render) {
       const style = part.style ? part.style(tokens, inst.ch, inst.props) : {};
       part.render(this.nodeOf(inst), p, style);

@@ -15,6 +15,8 @@ export interface Element {
   /** Open-ended semantic tags projected from the model by the view.
    *  Each becomes an animated channel automatically. */
   states?: Record<string, boolean>;
+  /** Use-site extensions (scope 3) — applied last, wins over theme/definition. */
+  exts?: unknown[];
 }
 
 export class Instance {

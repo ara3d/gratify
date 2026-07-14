@@ -60,8 +60,43 @@ export const tokens: Tokens = {
 let target: Palette = dark;
 export let themeName = "dark";
 
+/** Bumped whenever the active theme (palette or extensions) changes; the
+ *  runtime uses it to invalidate per-instance composed-definition caches. */
+export let themeVersion = 0;
+
 export function setTheme(name: string) {
-  if (themes[name]) { target = themes[name]; themeName = name; }
+  if (themes[name]) { target = themes[name]; themeName = name; themeVersion++; }
+}
+
+// ---- theme-scope extensions (scope 2 of the layering algebra) ---------------
+// A theme is tokens + per-part extension lists. Targeting a part name also
+// reaches parts derived from it (ancestry rule, extend.ts).
+type AnyExt = (def: unknown) => unknown;
+const themeExts = new Map<string, Map<string, AnyExt[]>>();
+
+/** Register an extension on every instance of a part (and its derivatives)
+ *  while the named theme is active. */
+export function extendTheme(theme: string, partName: string, ext: AnyExt) {
+  let m = themeExts.get(theme);
+  if (!m) themeExts.set(theme, (m = new Map()));
+  m.set(partName, [...(m.get(partName) ?? []), ext]);
+  if (theme === themeName) themeVersion++;
+}
+
+/** Remove a theme's extensions for a part (debug/toggling). */
+export function clearThemeExt(theme: string, partName: string) {
+  themeExts.get(theme)?.delete(partName);
+  if (theme === themeName) themeVersion++;
+}
+
+/** Extensions the ACTIVE theme applies to a part with the given name+ancestry. */
+export function activeThemeExts(partName: string, ancestors?: string[]): AnyExt[] {
+  const m = themeExts.get(themeName);
+  if (!m) return [];
+  const out: AnyExt[] = [];
+  for (const a of ancestors ?? []) out.push(...(m.get(a) ?? []));
+  out.push(...(m.get(partName) ?? []));
+  return out;
 }
 
 /** Step live token values toward the target palette. True while still fading. */

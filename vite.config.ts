@@ -15,6 +15,7 @@ export default defineConfig({
         todo: resolve(__dirname, "examples/todo/index.html"),
         toggles: resolve(__dirname, "examples/toggles/index.html"),
         undo: resolve(__dirname, "examples/undo/index.html"),
+        extensions: resolve(__dirname, "examples/extensions/index.html"),
       },
     },
   },
