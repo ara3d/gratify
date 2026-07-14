@@ -6,26 +6,31 @@
 // effects below. The juice is layered on GLOBALLY by wrapping every control
 // with two extensions ("wrap, don't edit"):
 //
-//   • shake   — mapRender translates each control by a tiny time-based jitter,
-//               so the whole panel trembles. A slider sets the amplitude; at 0
-//               it's off and the loop sleeps.
+//   • quake   — press any BUTTON and the whole panel shudders, then the tremor
+//               decays away to nothing. The shake is a mapRender that translates
+//               each control by a jitter whose amplitude is exp(-t) since the
+//               last press; a button just appends a behavior that stamps the
+//               press time.
 //   • magnify — mapRender scales a control up as the cursor nears its center,
 //               a fisheye that follows the pointer. A toggle turns it on.
 //
 // Both effects read only public capabilities (node.time, node.pointer, the
 // painter transform), so the same wrapper works on any widget — including the
-// very slider and toggle that control the effects. That's the whole point:
-// the effect is a function of a part definition, applied to all of them.
+// magnify toggle itself. That's the whole point: the effect is a function of a
+// part definition, applied to all of them.
 // ============================================================================
 
 import {
-  Element, mapRender, mount, PartExt, Row, Stack, Label, withExt,
+  addOn, Element, mapRender, mount, PartExt, Press, Row, Stack, Label, withExt,
 } from "gratify";
 import { Button, Checkbox, Slider, Toggle } from "../shared/widgets";
 
 import { attachSourcePanel } from "../shared/source-panel";
 import mainSource from "./main.ts?raw";
 import widgetsSource from "../shared/widgets.ts?raw";
+
+const PEAK = 6;        // px — the shake amplitude at the instant of a press
+const DECAY = 3.5;     // per second — how fast the tremor dies away
 
 // ── The two global effects (each an ordinary PartExt) ─────────────────────────
 
@@ -36,14 +41,17 @@ const phase = (key: string) => {
   return h;
 };
 
-/** Trembles a control by `amp` px, a function of the clock. Amplitude 0 = a
- *  plain passthrough, so the panel is perfectly still until you raise it. */
-const shake = (amp: number): PartExt =>
+/** Trembles a control after a press, decaying to nothing. `lastQuake` is the
+ *  GNode.time of the last button press; amplitude is PEAK·e^(−DECAY·elapsed),
+ *  so once it fades below a pixel this is a plain passthrough. */
+const quake = (lastQuake: number): PartExt =>
   mapRender((node, paint, _style, base) => {
+    const t = node.time ?? 0;
+    const amp = PEAK * Math.exp(-DECAY * (t - lastQuake));
     if (amp < 0.05) { base(); return; }
-    const t = node.time ?? 0, ph = phase(node.key);
-    const dx = Math.sin(t * 34 + ph) * amp;
-    const dy = Math.cos(t * 29 + ph * 1.7) * amp;
+    const ph = phase(node.key);
+    const dx = Math.sin(t * 40 + ph) * amp;
+    const dy = Math.cos(t * 34 + ph * 1.7) * amp;
     paint.push();
     paint.translate(dx, dy);
     base();
@@ -66,9 +74,13 @@ const magnify = (on: number): PartExt =>
     paint.pop();
   });
 
+/** Appended to the buttons only: stamps the press time so the panel quakes.
+ *  All appended press behaviors run, so the button's own click still fires. */
+const triggersQuake = addOn(Press((node) => ({ kind: "quake", time: node.time ?? 0 })));
+
 // ── State ─────────────────────────────────────────────────────────────────────
 interface Doc {
-  shake: number;     // 0..1 — shake amplitude
+  lastQuake: number;   // GNode.time of the last button press
   magnify: boolean;
   // a few ordinary controls, present just to be affected by the effects
   power: boolean;
@@ -78,7 +90,7 @@ interface Doc {
 }
 
 type Intent =
-  | { kind: "shake"; value: number }
+  | { kind: "quake"; time: number }
   | { kind: "magnify" }
   | { kind: "power" }
   | { kind: "volume"; value: number }
@@ -87,7 +99,7 @@ type Intent =
 
 function update(doc: Doc, intent: Intent): Doc {
   switch (intent.kind) {
-    case "shake": return { ...doc, shake: intent.value };
+    case "quake": return { ...doc, lastQuake: intent.time };
     case "magnify": return { ...doc, magnify: !doc.magnify };
     case "power": return { ...doc, power: !doc.power };
     case "volume": return { ...doc, volume: intent.value };
@@ -96,15 +108,12 @@ function update(doc: Doc, intent: Intent): Doc {
   }
 }
 
-const MAX_SHAKE = 6;   // px at slider = 1
-
 // ── View ──────────────────────────────────────────────────────────────────────
 function view(doc: Doc): Element {
   // The global effects, resolved for this frame. Every control gets both — the
   // effect is decided ONCE here, not per widget.
-  const amp = doc.shake * MAX_SHAKE;
   const magOn = doc.magnify ? 1 : 0;
-  const fx = (el: Element): Element => withExt(el, magnify(magOn), shake(amp));
+  const fx = (el: Element): Element => withExt(el, magnify(magOn), quake(doc.lastQuake));
 
   const rowLabel = (key: string, text: string, control: Element): Element =>
     Row(key, { gap: 16, align: "center" }, [
@@ -116,9 +125,6 @@ function view(doc: Doc): Element {
     Label("title", { text: "Global effects", size: 22, weight: 700, bright: true }),
     Label("sub", { text: "Stock controls, written normally. Two effects wrapped over ALL of them — nothing was edited.", dim: true, size: 12 }),
 
-    // The effect controls — themselves ordinary widgets, and themselves affected.
-    rowLabel("shake", "Shake",
-      Slider("shake/s", { value: doc.shake, set: (value) => ({ kind: "shake", value }) })),
     rowLabel("mag", "Magnify (hover the controls)",
       Toggle("mag/t", { on: doc.magnify, flip: { kind: "magnify" } })),
 
@@ -130,14 +136,17 @@ function view(doc: Doc): Element {
       Slider("volume/s", { value: doc.volume, set: (value) => ({ kind: "volume", value }) })),
     rowLabel("agree", "Agree",
       Checkbox("agree/c", { on: doc.agree, toggle: { kind: "agree" } })),
+
+    // Press a button → the whole panel quakes, then settles. The stock Button is
+    // untouched; a `triggersQuake` behavior is appended at its use site.
     Row("buttons", { gap: 12 }, [
-      fx(Button("save", { label: "Save", accent: true, press: { kind: "click" } })),
-      fx(Button("cancel", { label: "Cancel", press: { kind: "click" } })),
-      fx(Button("delete", { label: "Delete", danger: true, press: { kind: "click" } })),
+      fx(withExt(Button("save", { label: "Save", accent: true, press: { kind: "click" } }), triggersQuake)),
+      fx(withExt(Button("cancel", { label: "Cancel", press: { kind: "click" } }), triggersQuake)),
+      fx(withExt(Button("delete", { label: "Delete", danger: true, press: { kind: "click" } }), triggersQuake)),
     ]),
 
     Label("hint", {
-      text: `Raise Shake to make everything tremble · toggle Magnify and move the mouse · clicks ${doc.clicks}`,
+      text: `Press a button to shake the panel · toggle Magnify and move the mouse · clicks ${doc.clicks}`,
       dim: true, size: 11,
     }),
   ]);
@@ -147,12 +156,12 @@ function view(doc: Doc): Element {
 const canvas = document.getElementById("c") as HTMLCanvasElement;
 
 mount(canvas, {
-  init: { shake: 0.35, magnify: true, power: true, volume: 0.6, agree: false, clicks: 0 },
+  init: { lastQuake: -999, magnify: true, power: true, volume: 0.6, agree: false, clicks: 0 },
   update,
   view,
-  // Shake is a function of the clock, which the rest-detector can't see; keep
-  // the loop awake while there's any amplitude, then let it sleep.
-  ambient: (doc) => doc.shake * MAX_SHAKE > 0.05,
+  // The quake is a function of the clock, which the rest-detector can't see;
+  // keep the loop awake while the tremor is still perceptible, then let it sleep.
+  ambient: (doc, time) => time - doc.lastQuake < 1.6,
 });
 
 attachSourcePanel([
