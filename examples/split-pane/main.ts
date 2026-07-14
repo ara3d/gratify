@@ -1,14 +1,16 @@
 // ============================================================================
 // Example: split-pane — custom layout parts, reflow, and live resize.
 //
-// Three brand-new layout containers, each ONE part() with measure/place — no
+// Two custom layout containers, each ONE part() with measure/arrange — no
 // framework changes, exactly as "a custom layout is a part" promises:
 //
 //   • SplitPane — fills the viewport and hands its two panes a rect split by a
 //     fraction; a draggable vertical Divider between them drives the fraction.
-//   • Flow      — a wrapping row: fixed-size children pack left-to-right and
-//     wrap to the next line to fill whatever width the pane gives it.
 //   • Pane      — a well that stretches its single child to fill it.
+//
+// The wrapping row is `Flow`, now a Gratify built-in: with real two-phase
+// layout it reports an honest height from the width it's given, so it composes
+// anywhere (no local copy needed).
 //
 // The left pane is a Flow of fixed-size buttons. The right pane holds an
 // EXTERNAL slider that sets every button's width. Drag the divider → both panes
@@ -18,7 +20,7 @@
 // ============================================================================
 
 import {
-  calpha, clamp, Gesture, Intentish, Label, mount, part, Press, rect, Stack,
+  calpha, clamp, Flow, Gesture, Intentish, Label, mount, part, Press, rect, Stack,
   surface, v, Element,
 } from "gratify";
 import { Slider } from "../shared/widgets";
@@ -56,11 +58,12 @@ function update(doc: Doc, intent: Intent): Doc {
 const widthOf = (width01: number) => MIN_W + width01 * (MAX_W - MIN_W);
 
 // ── SplitPane — fills the viewport, splits it by a fraction ───────────────────
-// measure returns (0,0) so layoutScene places it at the full viewport, exactly
-// like a Pan surface. Its place() carves that rect into left | divider | right.
+// measure returns the room it's offered ("I fill whatever I'm given"), so it
+// spans the full viewport. Its arrange() carves that rect into left | divider |
+// right.
 const SplitPane = part<{ split: number }>()("split-pane", {
-  measure: () => v(0, 0),
-  place: (props, r) => {
+  measure: (_props, avail) => avail,
+  arrange: (props, r) => {
     const x = r.x + MARGIN, y = r.y + MARGIN, w = r.w - 2 * MARGIN, h = r.h - 2 * MARGIN;
     const f = clamp(props.split, 0.12, 0.88);
     const leftW = f * w - DIV / 2;
@@ -99,30 +102,14 @@ const Divider = part<Record<string, never>>()("divider", {
 });
 
 // ── Pane — a well that stretches its single child to fill it ──────────────────
+// measure returns what it's offered (fill); arrange gives its one child the
+// whole rect. `Flow` (now a Gratify built-in) drops straight into it and, given
+// a real width, reports an honest wrapped height.
 const Pane = part<Record<string, never>>()("pane", {
-  measure: () => v(0, 0),
-  place: (_p, r, kids) => kids.map(() => r),   // one child, full rect
+  measure: (_p, avail) => avail,
+  arrange: (_p, r, kids) => kids.map(() => r),   // one child, full rect
   style: (t) => ({ well: calpha(t.bg, 0.4), edge: t.muted }),
   render: (node, paint, s) => paint.box(node.rect, 10, s.well, s.edge, 1),
-});
-
-// ── Flow — a wrapping row: pack left-to-right, wrap to fill the given width ────
-// The height of a wrap layout depends on the WIDTH it is given — which only
-// exists at place() time — so measure() can't compute it. That is fine here:
-// SplitPane hands Flow a fixed pane rect, and place() does all the work.
-const Flow = part<{ gap?: number; pad?: number }>()("flow", {
-  measure: () => v(0, 0),
-  place: (props, r, kids) => {
-    const gap = props.gap ?? 8, pad = props.pad ?? 12;
-    let x = r.x + pad, y = r.y + pad, rowH = 0;
-    return kids.map(({ size }) => {
-      if (x + size.x > r.right - pad && x > r.x + pad) { x = r.x + pad; y += rowH + gap; rowH = 0; }
-      const out = rect(x, y, size.x, size.y);
-      x += size.x + gap;
-      rowH = Math.max(rowH, size.y);
-      return out;
-    });
-  },
 });
 
 // ── FixedButton — a fixed-size button whose width comes from a prop ───────────

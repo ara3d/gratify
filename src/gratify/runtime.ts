@@ -66,7 +66,7 @@ const GESTURE_ROOT: AnyDef = { name: "__gesture-root" };
 const ADORN_ROOT: AnyDef = {
   name: "__adorn-root",
   measure: () => v(0, 0),
-  place: (_props, r, kids) => kids.map((k) => rect(r.x + (k.pos?.x ?? 0), r.y + (k.pos?.y ?? 0), k.size.x, k.size.y)),
+  arrange: (_props, r, kids) => kids.map((k) => rect(r.x + (k.pos?.x ?? 0), r.y + (k.pos?.y ?? 0), k.size.x, k.size.y)),
 };
 
 export class Runtime<TDoc, TIntent> {

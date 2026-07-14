@@ -37,7 +37,9 @@ style(tokens, ch, props) --> S  --render-->  pixels
 7. Render reads `node.rect` + resolved style only. Logic stay out of paint.
 8. Prefer pure `update`. Mutate Doc break `withUndo`.
 9. Text input, modal popups (dropdowns), instance-local state — **not built yet**. Don't invent APIs for them; skip or stub outside framework. (Adornments ARE built — see below.)
-10. State props type once via curried `part<Props>()("name", spec)`; never name a style interface — `S` is inferred from `style`'s return. Legacy `part<P,S>(...)` still compiles but the curried form types interactor callbacks (single-call form degrades them to `unknown`).
+10. **House form: the builder** — `part("name").props<Props>().defaults({ gap: 8 }).measure(…).arrange(…).style(…).render(…)`. Never name a style interface — `S` infers from `.style()`'s return and flows into `.render()`. Rules the types enforce: `.props()`/`.defaults()` first; `.size()`/`.intrinsic(w,h)` (leaf) vs `.measure()`/`.arrange()`/`.fill()`/`.pack()` (container) vs `.body()` (composite) mutually exclusive; `.style()` before `.render()`. `.defaults()` makes those keys non-optional in facets (write `p.gap`, never `p.gap ?? 8`). `.pack(f)` = one packing function drives measure AND arrange (cannot desync). Every prefix is already a callable part; no `.build()`. Derive with `extendPart("new-name", Base).style(…)`. Spec-object forms `part<P>()("name", spec)` / `part<P,S>("name", spec)` still compile.
+    - **Interactor sugar**: prefer `.press(n => intent)`, `.drag1d({ axis, to })`, `.gesture({ begin, during, up })`, `.keys({ Delete: n => intent })` over `.on(Gesture<P,S>(…))` — the chain fixes the prop type and `.gesture`'s private state infers from `begin`'s return; never restate `<Props, State>`. `.on(…)` remains for Pan()/Focusable()/prebuilt values.
+    - **Channel names**: `.channels({ "fx/sheen": … })` feeds `node.ch.` autocomplete (declared + auto `hover/press/drag/focus/enter/exit`). Extensions are typed: `PartExt<P>`, `PropsOf<typeof Part>`; `derivePart` types inline `mapStyle`/`addOn` callbacks against the base's props.
 11. If `render` wants a token, the value belongs in `style`. Parts never import `tokens` (checked by `npm run check`); the style function receives it. Spread a recipe from `style.ts` (`surface`, `textTone`) then add your own fields. Cross-widget restyle assumes `SurfaceStyle` = `{ fill, edge, text }`.
 
 ## App skeleton
@@ -66,7 +68,7 @@ Undo: wrap whole app — `mount(canvas, withUndo({ init, update, view }))`. Emit
 
 | Facet | Role |
 |-------|------|
-| `size` / `measure`+`place` | leaf size / container layout |
+| `size` / `measure(avail)`+`arrange` | leaf size / two-phase container layout (measure: desired size given at most `avail`; arrange: place children in the final rect). Fill = `measure: (_p, avail) => avail` |
 | `channels` | extra chase specs (`target`+`rate`\|`spring`, or `decay` impulse) |
 | `style(t, ch, props)` | → flat style record `S` |
 | `render(node, paint, S)` | draw (chrome under content for composites) |
@@ -80,7 +82,7 @@ Auto channels: `hover`, `press`, `drag`, `focus`, `enter`, `exit`, layout pos/si
 
 ## Time-based motion (pulses / shakes / bounces)
 
-`node.time` = seconds since start, ever-rising. Use for motion that is a *function of time*, not a transition (`sin(node.time*…)`). The channel rest-detector can't see time motion, so keep the loop awake with `AppSpec.ambient(doc, time) => boolean` — true while animating, false to sleep. `rt.animating` reads the current rest state. Examples: `combo-button`, `earthquake`, `magnify`.
+`node.time` = seconds since start, ever-rising. Use for motion that is a *function of time*, not a transition (`sin(node.time*…)`). The channel rest-detector can't see time motion, so keep the loop awake with `AppSpec.ambient(doc, time) => boolean` — true while animating, false to sleep. `rt.animating` reads the current rest state. Examples: `combo-button`, `global-effects`, `juice-gallery`.
 
 ## Style arithmetic
 
@@ -132,7 +134,7 @@ on: [
 
 ## Built-ins
 
-`Stack`, `Row`, `Free`, `Layers`, `Label`. Layout sizes feed **position/size channels** — reflow animates alone.
+`Stack`, `Row`, `Free`, `Layers`, `Flow` (wrapping row), `Label`. Layout sizes feed **position/size channels** — reflow animates alone.
 
 Layers: `"world" | "overlay" | "screen"` — pan/zoom aware.
 
@@ -157,8 +159,8 @@ npm run check    # boundary + tsc
 | `node-editor` | surface, anchors/wires, Gesture overlay, slice |
 | `borders` | none/single/double/sunken/raised bevels; press-flip |
 | `combo-button` | rapid-click juice: heat/punch/shake, `node.time`, impulse |
-| `magnify` | fisheye lens, `node.time` bounce, `ambient` |
-| `earthquake` | fully time-based tremor (magnitude*exp decay + sin) + `ambient` |
+| `global-effects` | stock controls wrapped globally with shake (`node.time`+`translate`) + pointer magnify (`scaleAt`); `mapRender`, `ambient` |
+| `juice-gallery` | 3×3 grid: nine buttons/sliders, one juicy effect each (squash/pop/wobble/magnet/confetti/spring/comet/elastic/rainbow) via channels + particles |
 | `widget-board` | 15 Kea-style controls (slider/range/angle/arc/xy/box2d/box3d/color/gradient/…) on a `Pan()` surface |
 | `adornments` | tooltip/badge/close layered onto plain cards via `addAdorn`; overlay layer, enter/exit, interactive |
 

@@ -415,6 +415,169 @@ describe("adornments", () => {
   });
 });
 
+// ---- the part builder (typestate chain; every step a usable ctor) -----------
+import { extendPart, Rect, UNBOUNDED, type Avail, type MeasureCtx } from "../src/gratify";
+import { vi } from "vitest";
+
+describe("part builder", () => {
+  it("builds a working part; style S flows into render", () => {
+    const Chip = part("chip")
+      .props<{ label: string; w?: number }>()
+      .defaults({ w: 60 })
+      .size((p) => v(p.w, 20))                       // p.w: number — default applied
+      .style((_t, ch) => ({ glow: 4 * ch.hover }))
+      .render((_n, _p, s) => { void (s.glow * 2); });  // s typed from style above
+    expect(Chip.def.name).toBe("chip");
+    expect(Chip.def.size!({ label: "x", w: 60 }, { text: () => v(0, 0) })).toEqual(v(60, 20));
+  });
+
+  it("defaults merge under use-site props at element creation", () => {
+    const P = part("bdefs").props<{ gap?: number; pad?: number }>().defaults({ gap: 8, pad: 2 });
+    expect((P("k", {}).props as { gap: number }).gap).toBe(8);
+    expect((P("k", { gap: 3 }).props as { gap: number; pad: number })).toMatchObject({ gap: 3, pad: 2 });
+  });
+
+  it("fill measures to avail", () => {
+    const F = part("bfill").props<Record<string, never>>().fill();
+    const m = { text: () => v(0, 0), count: 0, child: () => v(0, 0), children: () => [] } as MeasureCtx;
+    expect(F.def.measure!({}, v(123, 45), m)).toEqual(v(123, 45));
+  });
+
+  it("pack drives both phases from one function (they cannot desync)", () => {
+    // three 10×10 children into width 25: two rows expected from BOTH phases
+    const m: MeasureCtx = {
+      text: () => v(0, 0), count: 3,
+      child: () => v(10, 10),
+      children: (a: Avail) => { void a; return [v(10, 10), v(10, 10), v(10, 10)]; },
+    };
+    const desired = Flow.def.measure!({ gap: 5, pad: 0 }, v(25, Infinity), m);
+    expect(desired.y).toBe(25);                                    // 10 + 5 + 10
+    const rects = Flow.def.arrange!({ gap: 5, pad: 0 }, new Rect(0, 0, 25, 25),
+      [v(10, 10), v(10, 10), v(10, 10)].map((size, i) => ({ key: `${i}`, size, props: {} })));
+    expect(rects[2].y).toBe(15);                                   // wrapped to row 2
+    void UNBOUNDED;
+  });
+
+  it("every prefix is a valid part (no .build() step)", () => {
+    const Half = part("bhalf").props<{ n: number }>();
+    const el = Half("k", { n: 1 });                 // callable mid-chain
+    expect(el.part.name).toBe("bhalf");
+  });
+
+  it("extendPart re-opens a part under a new name with ancestry", () => {
+    const Fancy = extendPart("fancy-flow", Flow).style(() => ({ tint: 1 }));
+    expect(Fancy.def.ancestors).toContain("flow");
+    expect(Fancy.def.arrange).toBe(Flow.def.arrange);   // facets carried over
+  });
+
+  it("typestate: layout roles are mutually exclusive; props comes first", () => {
+    const leaf = part("bts1").props<{ w: number }>().size((p) => v(p.w, 1));
+    // @ts-expect-error leaf chose size — measure no longer exists
+    void leaf.measure;
+    const container = part("bts2").props<Record<string, never>>().fill();
+    // @ts-expect-error container chose fill — size no longer exists
+    void container.size;
+    const started = part("bts3").on();
+    // @ts-expect-error a facet was declared — props can no longer be set
+    void started.props;
+    const rendered = part("bts4").props<Record<string, never>>().render(() => {});
+    // @ts-expect-error style must precede render
+    void rendered.style;
+  });
+
+  it("builder containers behave in a live runtime (Flow in Stack, honest height)", () => {
+    const Fixed = part("bfixed").props<{ w: number }>().size((p) => v(p.w, 10)).render(() => {});
+    const rt = new Runtime(null, {
+      init: 0, update: (d: number) => d,
+      view: () => Stack("root", { gap: 0, pad: 0 }, [
+        Flow("flow", { gap: 0, pad: 0 }, [Fixed("a", { w: 60 }), Fixed("b", { w: 60 })]),
+        Fixed("after", { w: 10 }),
+      ]),
+    }, { headless: true, width: 100, height: 300 });
+    rt.step(60);
+    // width 100 wraps two 60-wide kids into two rows → flow height 20;
+    // the sibling sits BELOW the flow, not on top of it.
+    expect(rt.root.children[0].rect.h).toBeCloseTo(20, 0);
+    expect(rt.root.children[1].rect.y).toBeGreaterThan(19);
+  });
+
+  it("duplicate sibling keys warn loudly", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    reconcile(null, tree(["x", "x"]));
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining(`duplicate child key "x"`));
+    spy.mockRestore();
+  });
+
+  it(".press sugar: props typed from the chain, intent dispatches on click", () => {
+    const Btn = part("bpress")
+      .props<{ label: string }>()
+      .intrinsic(40, 20)
+      .render(() => {})
+      .press((n) => ({ kind: "hit", id: n.props.label }));   // n.props.label — no cast
+    const rt = new Runtime<{ hits: string[] }, { kind: "hit"; id: string }>(null, {
+      init: { hits: [] },
+      update: (d, i) => ({ hits: [...d.hits, i.id] }),
+      view: () => Stack("root", {}, [Btn("b", { label: "go" })]),
+    }, { headless: true, width: 200, height: 100 });
+    rt.step(3);
+    rt.pointerDown({ x: 5, y: 5 });
+    rt.pointerUp({ x: 5, y: 5 });
+    expect(rt.doc.hits).toEqual(["go"]);
+  });
+
+  it(".gesture sugar: private state inferred from begin's return", () => {
+    const Knob = part("bgest")
+      .props<{ value: number }>()
+      .intrinsic(30, 30)
+      .render(() => {})
+      .gesture({
+        begin: (n, p) => ({ start: n.props.value, y0: p.y }),          // state inferred
+        during: (st, _n, p) => ({ kind: "set", value: st.start + (p.y - st.y0) }),
+      });
+    const rt = new Runtime<{ value: number }, { kind: "set"; value: number }>(null, {
+      init: { value: 10 },
+      update: (_d, i) => ({ value: i.value }),
+      view: (d) => Stack("root", {}, [Knob("k", { value: d.value })]),
+    }, { headless: true, width: 200, height: 100 });
+    rt.step(3);
+    rt.pointerDown({ x: 5, y: 5 });
+    rt.pointerMove({ x: 5, y: 25 });
+    rt.pointerUp({ x: 5, y: 25 });
+    expect(rt.doc.value).toBe(30);   // 10 + (25 - 5)
+  });
+
+  it(".keys sugar routes like Keys()", () => {
+    const Pad = part("bkeys")
+      .props<Record<string, never>>()
+      .intrinsic(30, 30)
+      .render(() => {})
+      .on(Focusable())
+      .keys({ x: () => ({ kind: "hit", id: "kx" }) });
+    const rt = new Runtime<{ hits: string[] }, { kind: "hit"; id: string }>(null, {
+      init: { hits: [] },
+      update: (d, i) => ({ hits: [...d.hits, i.id] }),
+      view: () => Stack("root", {}, [Pad("p", {})]),
+    }, { headless: true, width: 200, height: 100 });
+    rt.step(3);
+    rt.pointerDown({ x: 5, y: 5 });
+    rt.pointerUp({ x: 5, y: 5 });
+    rt.key("x");
+    expect(rt.doc.hits).toEqual(["kx"]);
+  });
+
+  it("derivePart types inline extensions against the base's props", () => {
+    const Base = part("bderiv")
+      .props<{ label: string }>()
+      .intrinsic(10, 10)
+      .style(() => ({ n: 1 }))
+      .render(() => {});
+    const Loud = derivePart("bderiv-loud", Base,
+      mapStyle((_t, _c, p, base: { n: number }) => ({ ...base, n: p.label.length })));  // p: { label: string }
+    const out = Loud.def.style!(null as never, {}, { label: "abcd" }) as { n: number };
+    expect(out.n).toBe(4);
+  });
+});
+
 // ---- body facet (composites: parts made of parts) ---------------------------
 import { mapBody } from "../src/gratify";
 
@@ -491,5 +654,107 @@ describe("body facet", () => {
     rt.step(1);
     expect(rt.root.children[0].ghosts.length).toBe(1);
     expect(rt.root.children[0].ghosts[0].key).toBe("body");
+  });
+});
+
+// ---- two-phase layout: measure(avail) + arrange -----------------------------
+import { Flow } from "../src/gratify";
+
+/** A fixed 100×20 box, wide enough to force a Flow to wrap in a narrow view. */
+const WBox = part<Record<string, never>>("wbox", { size: () => v(100, 20), render() {} });
+
+describe("two-phase layout", () => {
+  it("a Flow nested in a Stack reports an honest height; siblings sit below it", () => {
+    // 6 boxes of 100px in a 260px pane pack 2-per-row → 3 rows. Old single-pass
+    // Flow measured (0,0) here and its sibling drew on top of it; two-phase gives
+    // it a real height from the width the Stack hands it.
+    const rt = new Runtime<number, never>(null, {
+      init: 0, update: (d) => d,
+      view: () => Stack("root", { gap: 0, pad: 0 }, [
+        Flow("flow", { gap: 10, pad: 0 }, Array.from({ length: 6 }, (_, i) => WBox(`w${i}`, {}))),
+        Box("after", { n: 0 }),
+      ]),
+    }, { headless: true, width: 260, height: 400 });
+    rt.step(300);   // let position springs + size eases settle
+
+    const flow = rt.root.children[0];
+    const after = rt.root.children[1];
+    // 3 rows of 20px with two 10px gaps = 80px — a real wrapped height, not 0.
+    expect(Math.abs(flow.rect.h - 80)).toBeLessThan(1);
+    // the sibling sits BELOW the flow (the bug was it sitting at y=0, overlapping)
+    expect(after.rect.y).toBeGreaterThanOrEqual(flow.rect.y + flow.rect.h - 1);
+    expect(Math.abs(after.rect.y - 80)).toBeLessThan(1);
+  });
+
+  it("measure→avail fills the viewport", () => {
+    const Filler = part<Record<string, never>>("filler", {
+      measure: (_p, avail) => avail, render() {},
+    });
+    const rt = new Runtime<number, never>(null, {
+      init: 0, update: (d) => d, view: () => Filler("root", {}),
+    }, { headless: true, width: 321, height: 234 });
+    rt.step(50);
+    expect(rt.root.rect.w).toBe(321);
+    expect(rt.root.rect.h).toBe(234);
+  });
+
+  it("a width-dependent leaf gets taller as its available width shrinks", () => {
+    // A paragraph-like leaf: fewer columns fit in a narrow box → more rows.
+    const Para = part<Record<string, never>>("para", {
+      measure: (_p, avail) => {
+        const cols = Math.max(1, Math.floor(avail.x / 100));
+        return v(avail.x, Math.ceil(10 / cols) * 20);
+      },
+      render() {},
+    });
+    const mk = (w: number) => {
+      const rt = new Runtime<number, never>(null, {
+        init: 0, update: (d) => d,
+        view: () => Stack("root", { gap: 0, pad: 0 }, [Para("p", {})]),
+      }, { headless: true, width: w, height: 800 });
+      rt.step(200);
+      return rt.root.children[0].rect.h;
+    };
+    const wide = mk(500);    // 5 cols → 2 rows → 40
+    const narrow = mk(250);  // 2 cols → 5 rows → 100
+    expect(Math.abs(wide - 40)).toBeLessThan(1);
+    expect(Math.abs(narrow - 100)).toBeLessThan(1);
+    expect(narrow).toBeGreaterThan(wide);
+  });
+
+  it("default container measures to the union of its children under `avail`", () => {
+    // A part with children but no size/measure unions their sizes (what Card and
+    // other composites rely on).
+    const Group = part<Record<string, never>>("group", { render() {} });
+    const A = part<Record<string, never>>("a", { size: () => v(40, 10), render() {} });
+    const B = part<Record<string, never>>("b", { size: () => v(15, 55), render() {} });
+    const rt = new Runtime<number, never>(null, {
+      init: 0, update: (d) => d,
+      view: () => Group("root", {}, [A("a", {}), B("b", {})]),
+    }, { headless: true, width: 800, height: 600 });
+    rt.step(50);
+    // union = (max(40,15), max(10,55)) = (40, 55); root grows to the viewport.
+    expect(rt.root.rect.w).toBe(800);   // max(union.x, viewW)
+    // both children default-arrange at the origin at their own desired size
+    expect(rt.root.children[0].rect.w).toBe(40);
+    expect(rt.root.children[1].rect.h).toBe(55);
+  });
+
+  it("a single-constraint tree measures each node exactly once per pass", () => {
+    // The memo guards against re-measuring: one measure per leaf per layout pass.
+    let calls = 0;
+    const Counting = part<Record<string, never>>("counting", {
+      size: () => { calls++; return v(10, 10); }, render() {},
+    });
+    const rt = new Runtime<number, never>(null, {
+      init: 0, update: (d) => d,
+      view: () => Stack("root", { gap: 2 }, ["a", "b", "c"].map((k) => Counting(k, {}))),
+    }, { headless: true, width: 200, height: 200 });
+    calls = 0;
+    rt.step(1);                 // exactly one layout pass
+    expect(calls).toBe(3);      // 3 leaves, each measured once (no re-measure)
+    calls = 0;
+    rt.step(4);                 // four more passes
+    expect(calls).toBe(12);     // still exactly 3 per pass
   });
 });

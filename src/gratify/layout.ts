@@ -1,11 +1,21 @@
 // ============================================================================
-// Layout pass — measure bottom-up, place top-down, then step position springs
-// and size approaches so every layout change glides (README: "layout results
-// feed channels"). Pure over its inputs: no runtime state beyond the tree.
+// Layout pass — a real two-phase protocol (measure-arrange-plan.md):
+//   PASS 1  measure  — parent-driven, top-down: each node is asked "given at
+//                      most this much room, how big do you want to be?". A
+//                      container measures its children through a MeasureCtx
+//                      under whatever constraints its layout implies.
+//   PASS 2  arrange  — top-down: each node is handed its final rect and places
+//                      its children (absolute rects) inside it.
+// Then step position springs and size approaches so every layout change glides
+// (README: "layout results feed channels"). Pure over its inputs: no runtime
+// state beyond the tree; the per-pass MeasureMemo caches desired sizes so a
+// single-constraint tree measures each node once — O(n), the same class as the
+// old single-pass engine.
 // ============================================================================
 
 import { approach, Rect, v, Vec } from "./core";
 import { Measure } from "./painter";
+import { Avail, MeasureCtx, UNBOUNDED } from "./part";
 import { Instance } from "./scene";
 import { AnyDef } from "./effective";
 
@@ -14,27 +24,68 @@ const SIZE_RATE = 18;
 
 export type Eff = (inst: Instance) => AnyDef;
 
-function measureInst(inst: Instance, eff: Eff, m: Measure, sizes: Map<Instance, Vec>): Vec {
-  const part = eff(inst);
-  const kidSizes = inst.children.map((c) => measureInst(c, eff, m, sizes));
-  let s: Vec;
-  if (part.size) s = part.size(inst.props, m);
-  else if (part.measure) s = part.measure(inst.props, kidSizes, m);
-  else s = kidSizes.reduce((acc, k) => v(Math.max(acc.x, k.x), Math.max(acc.y, k.y)), v(0, 0));
-  sizes.set(inst, s);
-  return s;
+/** Per-pass measurement cache. A parent may measure a child more than once (a
+ *  future `grow` container measures twice), so desired sizes are memoized per
+ *  (instance, avail); `last` remembers each node's final desired size for the
+ *  arrange pass. Cleared every tick — a fresh instance per layoutScene call. */
+class MeasureMemo {
+  private cache = new WeakMap<Instance, Map<string, Vec>>();
+  private last = new WeakMap<Instance, Vec>();
+
+  constructor(private eff: Eff, private textM: Measure) {}
+
+  /** Desired size of `inst` under `avail`, memoized. */
+  measure(inst: Instance, avail: Avail): Vec {
+    let byAvail = this.cache.get(inst);
+    if (!byAvail) { byAvail = new Map(); this.cache.set(inst, byAvail); }
+    const key = `${avail.x}|${avail.y}`;
+    const hit = byAvail.get(key);
+    if (hit) return hit;
+    const s = this.dispatch(inst, avail);
+    byAvail.set(key, s);
+    this.last.set(inst, s);
+    return s;
+  }
+
+  /** The desired size a node last reported (what arrange uses). Falls back to a
+   *  fresh unbounded measure for a child its parent never measured. */
+  sizeOf(inst: Instance): Vec {
+    return this.last.get(inst) ?? this.measure(inst, UNBOUNDED);
+  }
+
+  private dispatch(inst: Instance, avail: Avail): Vec {
+    const part = this.eff(inst);
+    const ctx = this.ctxFor(inst);
+    if (part.size) return part.size(inst.props, ctx);
+    if (part.measure) return part.measure(inst.props, avail, ctx);
+    // default container: union (max on each axis) of children under `avail`.
+    const sizes = ctx.children(avail);
+    return sizes.reduce((acc, s) => v(Math.max(acc.x, s.x), Math.max(acc.y, s.y)), v(0, 0));
+  }
+
+  private ctxFor(inst: Instance): MeasureCtx {
+    const kids = inst.children;
+    return {
+      text: (s, size) => this.textM.text(s, size),
+      count: kids.length,
+      child: (i, av) => this.measure(kids[i], av),
+      children: (av) => kids.map((c) => this.measure(c, av)),
+    };
+  }
 }
 
-function placeInst(inst: Instance, target: Rect, eff: Eff, sizes: Map<Instance, Vec>) {
+function arrangeInst(inst: Instance, target: Rect, memo: MeasureMemo, eff: Eff) {
   inst.target = target;
   const part = eff(inst);
-  if (part.place && inst.children.length) {
-    const kids = inst.children.map((c) => ({ key: c.key, size: sizes.get(c)!, props: c.props, pos: c.el.pos }));
-    const rects = part.place(inst.props, target, kids);
-    inst.children.forEach((c, i) => placeInst(c, rects[i], eff, sizes));
+  if (part.arrange && inst.children.length) {
+    const kids = inst.children.map((c) => ({ key: c.key, size: memo.sizeOf(c), props: c.props, pos: c.el.pos }));
+    const rects = part.arrange(inst.props, target, kids);
+    inst.children.forEach((c, i) => arrangeInst(c, rects[i], memo, eff));
   } else {
+    // default arrange: each child at the node's origin at its desired size.
     for (const c of inst.children) {
-      placeInst(c, new Rect(target.x, target.y, sizes.get(c)?.x ?? 0, sizes.get(c)?.y ?? 0), eff, sizes);
+      const s = memo.sizeOf(c);
+      arrangeInst(c, new Rect(target.x, target.y, s.x, s.y), memo, eff);
     }
   }
 }
@@ -55,10 +106,11 @@ function stepRects(inst: Instance, dt: number) {
   for (const g of inst.ghosts) stepRects(g, dt);
 }
 
-/** One full layout pass over a tree. */
+/** One full layout pass over a tree: measure from the viewport down, arrange
+ *  into the final rects, then step the channels that make it glide. */
 export function layoutScene(root: Instance, dt: number, eff: Eff, m: Measure, viewW: number, viewH: number) {
-  const sizes = new Map<Instance, Vec>();
-  const s = measureInst(root, eff, m, sizes);
-  placeInst(root, new Rect(0, 0, Math.max(s.x, viewW), Math.max(s.y, viewH)), eff, sizes);
-  stepRects(root, dt);
+  const memo = new MeasureMemo(eff, m);
+  const s = memo.measure(root, v(viewW, viewH));      // PASS 1: measure
+  arrangeInst(root, new Rect(0, 0, Math.max(s.x, viewW), Math.max(s.y, viewH)), memo, eff);   // PASS 2: arrange
+  stepRects(root, dt);                                // channels consume arrange targets
 }

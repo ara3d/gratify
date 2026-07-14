@@ -83,7 +83,7 @@ flowchart TD
     subgraph FC["FRAME CLOCK · every frame · sleeps at rest"]
       direction TB
       Inst["Instance tree — retained; keeps springs + channels"]
-      Layout["layout — measure / place, reflow via springs"]
+      Layout["layout — measure(avail) / arrange, reflow via springs"]
       Chan["channels — chase targets (spring / ease)"]
       Paint["paint — style(tokens, ch, props) → render()"]
       Inst --> Layout --> Chan --> Paint
@@ -96,7 +96,8 @@ flowchart TD
 
 **The three moving parts of every widget:**
 
-- A **part** is a bundle of small *facets* — `size`/`measure` (geometry), `style` (tokens + channels → resolved values), `render` (paint the values), `body` (compose child parts), `on` (interactors), plus `channels`, `anchors`, `adorn`. All optional; you write only what a given widget needs.
+- A **part** is a bundle of small *facets* — `size`/`measure`+`arrange` (two-phase geometry), `style` (tokens + channels → resolved values), `render` (paint the values), `body` (compose child parts), `on` (interactors), plus `channels`, `anchors`, `adorn`. All optional; you write only what a given widget needs.
+- The **house form is the builder**: `part("chip").props<ChipProps>().defaults({ w: 60 }).size(…).style(…).render(…)`. Each step is a typed inference boundary (no curried `()` trick), every prefix is already a usable part, and the type system enforces the facet rules — leaf (`.size`/`.intrinsic`) vs. container (`.measure`/`.arrange`/`.fill`/`.pack`) vs. composite (`.body`) are mutually exclusive, `.style` precedes `.render`, `.defaults` makes defaulted props non-optional inside facets (no more `?? 8`), and `.pack()` derives both layout phases from one packing function so they cannot desync. `extendPart(name, base)` re-opens any part with the same vocabulary. Interactor sugar — `.press()`, `.drag1d()`, `.gesture()` (private state inferred from `begin`), `.keys()` — fixes the prop type from the chain, and `.channels()` feeds `node.ch.` autocomplete. Extensions are prop-typed too (`PartExt<P>`, `PropsOf`); `derivePart` types inline wrappers against the base's props. The spec-object forms of `part()` still work.
 - **Channels** are the animation substrate. There are no timelines or `animate()` calls — every visual number is a channel chasing a state-derived target, so motion is a side effect of *describing* the target, not of scripting the transition.
 - **Extensions** (`mapStyle`, `mapRender`, `addOn`, `mapBody`, …) wrap or append facets, and apply at three scopes — one part definition, a whole theme, or a single element — so you customize by composition, never by editing.
 

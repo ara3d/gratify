@@ -1,9 +1,12 @@
 # Gratify — a real two-phase layout: `measure(available)` + `arrange` (AI-generated proposal)
 
 *Written 2026-07-14 by Claude, from the `split-pane` example's finding that a
-wrapping `Flow` cannot report its height. Status: **proposal awaiting
-Christopher's review** — nothing here is implemented. Companion to
-[`plan.md`](plan.md); if the two disagree, `plan.md` and the code win.*
+wrapping `Flow` cannot report its height. Status: **IMPLEMENTED 2026-07-14** —
+`measure(props, avail, m)` + `arrange` replaced `measure(childSizes)` + `place`;
+`size` kept as leaf sugar; `Flow` is now a built-in; `split-pane`, `widget-board`,
+and `node-editor` ported to `measure → avail`; `mapMeasure`/`mapArrange` added;
+kernel tests cover the once-broken cases. Companion to [`plan.md`](plan.md); if
+the two disagree, `plan.md` and the code win.*
 
 ---
 

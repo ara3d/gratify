@@ -124,7 +124,9 @@ const Surface = part<SurfaceProps, { gridDot: Color }>("surface", {
 
   style: (t) => ({ gridDot: calpha(t.muted, 0.35) }),
 
-  // The surface is the infinite canvas behind everything.
+  // The surface is the infinite canvas behind everything: it fills whatever
+  // room it's offered (the viewport).
+  measure: (_p, avail) => avail,
   hit: () => true,
 
   // Its render is the dot grid. node.view carries the live viewport, so we

@@ -78,6 +78,15 @@ export function reconcile(prev: Instance | null, e: Element, parent?: Instance):
   const oldByKey = new Map(inst.children.map((c) => [c.key, c]));
   const kids = e.children || [];
   const newKeys = new Set(kids.map((c) => c.key));
+  // Duplicate sibling keys silently collide in the keyed diff (springs/channels
+  // bleed between the twins) — loud beats mysterious.
+  if (newKeys.size !== kids.length) {
+    const seen = new Set<string>();
+    for (const c of kids) {
+      if (seen.has(c.key)) console.error(`gratify: duplicate child key "${c.key}" under "${e.key}" — reconcile will collide them`);
+      seen.add(c.key);
+    }
+  }
   for (const c of inst.children) {
     if (!newKeys.has(c.key) && !c.exiting) {
       c.exiting = true; c.freshGhost = true;

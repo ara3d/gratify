@@ -561,7 +561,7 @@ const Vector3Ctl = part<{ x: number; y: number; z: number }>()("w-vec3", {
 // and this file's parts are all token-free. (The grid is app-level free drawing.)
 
 const Board = part<Record<string, never>>()("widget-board", {
-  size: () => v(0, 0),
+  measure: (_p, avail) => avail,   // fill the viewport (was size:()=>v(0,0))
   hit: () => true,
   style: (t) => ({ dot: calpha(t.muted, 0.35), hint: calpha(t.textDim, 0.9) }),
   render: (node, paint, s) => {
