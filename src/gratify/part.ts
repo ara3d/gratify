@@ -54,6 +54,8 @@ export interface ChildInfo {
   key: string;
   size: Vec;
   props: unknown;
+  /** The child element's `pos` hint (set via `at(...)`), if any. */
+  pos?: Vec;
 }
 
 export interface PartSpec<P, S = Record<string, unknown>> {
@@ -75,6 +77,13 @@ export interface PartSpec<P, S = Record<string, unknown>> {
   render?(node: GNode<P>, p: Painter, style: S): void;
   /** Behavior: interactors, as values. They only emit intents. */
   on?: Interactor<P>[];
+  /** Adornments: overlay elements anchored to this host (tooltips, badges,
+   *  resize grips, close buttons). Runs every frame, so it may read channels
+   *  (`node.ch.hover`) to appear/disappear — the elements are keyed, so they
+   *  play enter/exit. Position each with `at(element, worldPos)`. They render
+   *  on the overlay layer, above all content, and may carry their own
+   *  interactors. Append to this list on any part with `addAdorn(...)`. */
+  adorn?(node: GNode<P>): Element[];
 }
 
 export interface PartDef<P, S = Record<string, unknown>> extends PartSpec<P, S> {

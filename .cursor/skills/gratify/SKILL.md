@@ -36,7 +36,7 @@ style(tokens, ch, props) --> S  --render-->  pixels
 6. Namespace custom channels: `"fx/sheen"` not `"sheen"` (share node with hover/press/enter/exit).
 7. Render reads `node.rect` + resolved style only. Logic stay out of paint.
 8. Prefer pure `update`. Mutate Doc break `withUndo`.
-9. Text input, adornments, modal popups, instance-local state — **not built yet**. Don't invent APIs for them; skip or stub outside framework.
+9. Text input, modal popups (dropdowns), instance-local state — **not built yet**. Don't invent APIs for them; skip or stub outside framework. (Adornments ARE built — see below.)
 
 ## App skeleton
 
@@ -71,6 +71,7 @@ Undo: wrap whole app — `mount(canvas, withUndo({ init, update, view }))`. Emit
 | `on` | interactor list |
 | `anchors` | named world points for wires |
 | `hit` | custom hit (wires = curve distance) |
+| `adorn` | overlay elements anchored to host (tooltips/badges/grips); runs each frame, may read channels |
 
 Auto channels: `hover`, `press`, `drag`, `focus`, `enter`, `exit`, layout pos/size. Impulse: declare `decay`, call `node.kick("name")`.
 
@@ -102,6 +103,7 @@ mapSize((props, m, base) => ({ x: base.x, y: Math.max(base.y, 44) }))
 // append list facet
 addChannels({ "fx/x": { target: (n) => n.ch.hover, rate: 6 } })
 addOn(Press(...))
+addAdorn((n) => n.ch.hover > 0.5 ? [at(Tooltip("tip", { ... }), pos)] : [])  // decorate ANY widget
 
 derivePart("fancy", Button, sheen)          // scope 1
 extendTheme("dark", "button", neon)         // scope 2 (hits derivatives via ancestors)
@@ -154,6 +156,9 @@ npm run check    # boundary + tsc
 | `magnify` | fisheye lens, `node.time` bounce, `ambient` |
 | `earthquake` | fully time-based tremor (magnitude*exp decay + sin) + `ambient` |
 | `widget-board` | 15 Kea-style controls (slider/range/angle/arc/xy/box2d/box3d/color/gradient/…) on a `Pan()` surface |
+| `adornments` | tooltip/badge/close layered onto plain cards via `addAdorn`; overlay layer, enter/exit, interactive |
+
+Adornments: `adorn(node) → Element[]` on the overlay layer, positioned with `at(el, worldPos)`; interactive ones (with `on`) capture clicks, decorative ones (tooltip/badge) pass through. Append to any widget with `addAdorn(fn)`.
 
 Copy pattern from nearest example. Prefer `examples/shared/widgets` for stock Button/Toggle when extending demos.
 

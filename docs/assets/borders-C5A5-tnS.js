@@ -1,4 +1,4 @@
-import{c as l,r as d,p as x,P as f,v as r,m as k,a as v,b as h,S as y,L as b}from"./source-panel-CCgHUfrE.js";const T=`// ============================================================================
+import{c as l,b as d,p as x,P as f,v as r,m as k,d as v,a as h,S as y,L as b}from"./source-panel-1CdPGxVg.js";const T=`// ============================================================================
 // Example: borders — five classic control borders drawn by one part.
 //
 //   none     — no edge at all

@@ -63,8 +63,9 @@ export const Row = part<StackProps>("row", {
 export const Free = part<{ states?: Record<string, boolean> }>("free", {
   measure: () => v(0, 0),
   place(_props, r, kids): Rect[] {
-    return kids.map(({ size, props }) => {
-      const pos = (props as { pos?: Vec })?.pos ?? v(0, 0);
+    return kids.map(({ size, props, pos: elPos }) => {
+      // prefer the element-level pos (set via `at(...)`), fall back to props.pos
+      const pos = elPos ?? (props as { pos?: Vec })?.pos ?? v(0, 0);
       return new Rect(r.x + pos.x, r.y + pos.y, size.x, size.y);
     });
   },

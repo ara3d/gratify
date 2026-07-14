@@ -69,6 +69,13 @@ export const addChannels = (chs: Record<string, ChannelSpec<any>>): PartExt =>
 export const addOn = (...is: Interactor<any>[]): PartExt =>
   (def) => ({ ...def, on: [...(def.on ?? []), ...is] });
 
+/** Append adornments to ANY part — layer a tooltip, badge, or resize grip onto
+ *  a widget that never planned for it. The host's own adornments (if any) run
+ *  first, then yours; the results concatenate. This is decoration by
+ *  composition — the core reason the facet exists. */
+export const addAdorn = (fn: (node: GNode<any>) => Element[]): PartExt =>
+  (def) => ({ ...def, adorn: (node: GNode<any>) => [...(def.adorn?.(node) ?? []), ...fn(node)] });
+
 // ---- scope 1: definition — a new named part ------------------------------------
 
 /** Bake extensions into a new named part. Remembers its ancestry, so theme

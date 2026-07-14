@@ -22,6 +22,7 @@ export interface DrawEnv {
 export interface SceneView {
   root: Instance;
   gestureRoot: Instance | null;
+  adornRoot: Instance | null;
   fx: Fx[];
   viewport: { pan: Vec; zoom: number };
   dpr: number;
@@ -34,7 +35,8 @@ export function renderScene(p: Painter, s: SceneView, env: DrawEnv) {
   p.view(s.viewport.pan, s.viewport.zoom, s.dpr);
   drawPass(s.root, p, "world", "world", env);
   drawPass(s.root, p, "overlay", "world", env);
-  if (s.gestureRoot) drawPass(s.gestureRoot, p, "overlay", "overlay", env);
+  if (s.adornRoot) drawPass(s.adornRoot, p, "overlay", "overlay", env);      // tooltips, badges, grips
+  if (s.gestureRoot) drawPass(s.gestureRoot, p, "overlay", "overlay", env);  // active drag previews, topmost
   for (const f of s.fx) f.draw(p);
   p.screen(s.dpr);
   drawPass(s.root, p, "screen", "world", env);

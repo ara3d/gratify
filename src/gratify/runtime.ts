@@ -12,7 +12,7 @@
 // arrives as AppSpec { init, update, view } — nothing else crosses.
 // ============================================================================
 
-import { clamp, v, Vec } from "./core";
+import { clamp, rect, v, Vec } from "./core";
 import { CanvasPainter, NullPainter, Painter } from "./painter";
 import { Element, Instance, Layer, reconcile } from "./scene";
 import { GNode } from "./part";
@@ -60,6 +60,14 @@ interface ActiveGesture {
 /** Internal container for gesture preview elements. */
 const GESTURE_ROOT: AnyDef = { name: "__gesture-root" };
 
+/** Internal container for adornments: places each child at its element `pos`
+ *  (world coords), which the adorn author computes from the host's rect. */
+const ADORN_ROOT: AnyDef = {
+  name: "__adorn-root",
+  measure: () => v(0, 0),
+  place: (_props, r, kids) => kids.map((k) => rect(r.x + (k.pos?.x ?? 0), r.y + (k.pos?.y ?? 0), k.size.x, k.size.y)),
+};
+
 export class Runtime<TDoc, TIntent> {
   painter: Painter;
   doc: TDoc;
@@ -77,6 +85,7 @@ export class Runtime<TDoc, TIntent> {
   private press: PressState | null = null;
   private gesture: ActiveGesture | null = null;
   private gestureRoot: Instance | null = null;
+  private adornRoot: Instance | null = null;
   private panDrag: { pan0: Vec; p0: Vec } | null = null;
   private focus: Instance | null = null;
   private anchorMap = new Map<string, Anchor>();
@@ -140,7 +149,7 @@ export class Runtime<TDoc, TIntent> {
   pointerDown(p: Vec, mods?: Partial<Mods>) {
     Object.assign(this.mods, mods);
     this.pointer = p;
-    const hit = this.interactiveHit(this.root, p);
+    const hit = this.topInteractiveHit(p);
     if (hit) {
       const eff = this.effs.get(hit);
       const node = this.nodeOf(hit);
@@ -258,16 +267,22 @@ export class Runtime<TDoc, TIntent> {
     };
     animateScene(this.root, dt, env);
     if (this.gestureRoot) animateScene(this.gestureRoot, dt, { ...env, hovered: null });
+    // adornments read host channels (hover) + rect, so sync them after the host
+    // has animated; they get their own enter/exit/hover via animateScene.
+    this.syncAdornments(dt, eff);
+    if (this.adornRoot) animateScene(this.adornRoot, dt, env);
     for (const f of this.fx) f.update(dt);
     this.fx = this.fx.filter((f) => !f.done);
     this.prune(this.root);
     if (this.gestureRoot) this.prune(this.gestureRoot);
+    if (this.adornRoot) this.prune(this.adornRoot);
     renderScene(this.painter, {
-      root: this.root, gestureRoot: this.gestureRoot, fx: this.fx,
+      root: this.root, gestureRoot: this.gestureRoot, adornRoot: this.adornRoot, fx: this.fx,
       viewport: this.viewport, dpr: this.dpr, viewW: this.viewW, viewH: this.viewH,
     }, env);
 
-    const sig = this.signature(this.root) + (this.gestureRoot ? this.signature(this.gestureRoot) : 0);
+    const sig = this.signature(this.root) + (this.gestureRoot ? this.signature(this.gestureRoot) : 0) +
+      (this.adornRoot ? this.signature(this.adornRoot) : 0);
     this.moving = themeFading || this.fx.length > 0 || this.dirty || !!this.press || !!this.gesture ||
       (this.app.ambient?.(this.doc, this.time) ?? false) ||
       Math.abs(sig - this.lastSig) > 0.002;
@@ -301,6 +316,28 @@ export class Runtime<TDoc, TIntent> {
     }
   }
 
+  // ---- adornments (overlay elements anchored to hosts, guide §9) --------------
+  private syncAdornments(dt: number, eff: (i: Instance) => AnyDef) {
+    const kids: Element[] = [];
+    const collect = (inst: Instance) => {
+      const part = eff(inst);
+      if (part.adorn) {
+        // namespace each adornment key under its host so two hosts can't collide
+        for (const el of part.adorn(this.nodeOf(inst))) kids.push({ ...el, key: `${inst.key}::${el.key}` });
+      }
+      for (const c of inst.children) collect(c);
+    };
+    collect(this.root);
+
+    if (kids.length || this.adornRoot?.children.length || this.adornRoot?.ghosts.length) {
+      const rootEl: Element = { key: "__adorn", part: ADORN_ROOT, props: {}, children: kids, layer: "overlay" };
+      this.adornRoot = reconcile(this.adornRoot, rootEl);
+      layoutScene(this.adornRoot, dt, eff, this.painter.measure, this.viewW, this.viewH);
+    } else {
+      this.adornRoot = null;
+    }
+  }
+
   // ---- node capability record ------------------------------------------------
   private nodeOf(inst: Instance): GNode<unknown> {
     const lp = this.pointer ? this.layerPoint(this.layerOfInst(inst), this.pointer) : undefined;
@@ -327,7 +364,18 @@ export class Runtime<TDoc, TIntent> {
   }
 
   private hoverInst(): Instance | null {
-    return this.pointer ? this.renderHit(this.root, this.pointer) : null;
+    if (!this.pointer) return null;
+    // Only INTERACTIVE adornments (with `on`, e.g. a close button) capture hover
+    // and clicks; decorative ones (tooltip, badge) stay transparent so the host
+    // keeps its hover and clicks pass through to it.
+    if (this.adornRoot) { const h = this.interactiveHit(this.adornRoot, this.pointer); if (h) return h; }
+    return this.renderHit(this.root, this.pointer);
+  }
+
+  /** Interactive hit, overlay (adornments) first, then main content. */
+  private topInteractiveHit(p: Vec): Instance | null {
+    if (this.adornRoot) { const h = this.interactiveHit(this.adornRoot, p); if (h) return h; }
+    return this.interactiveHit(this.root, p);
   }
 
   private hitTest(inst: Instance, p: Vec): boolean {

@@ -1,4 +1,4 @@
-import{p as l,D as N,d as x,t as c,v as u,G as M,e as h,c as w,i as O,u as U,h as z,b as T,P as E,j as Z,m as nn,a as en,l as tn}from"./source-panel-CCgHUfrE.js";const rn=`// ============================================================================
+import{p as l,D as N,r as x,t as c,v as u,G as M,f as h,c as w,j as O,x as U,h as z,a as T,P as E,k as Z,m as nn,d as en,n as tn}from"./source-panel-1CdPGxVg.js";const rn=`// ============================================================================
 // Example: widget board — a dozen-plus creative-tool controls, reimplemented
 // from the Kea node editor's widget library.
 //

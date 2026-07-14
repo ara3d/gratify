@@ -366,3 +366,51 @@ describe("time and ambient", () => {
     expect(seen).toBeGreaterThan(0.1);
   });
 });
+
+// ---- adornments (overlay elements anchored to hosts) -------------------------
+import { addAdorn, at } from "../src/gratify";
+
+describe("adornments", () => {
+  it("addAdorn appends overlay elements; hover-gated ones enter/exit; interactive ones dispatch", () => {
+    type D = { removed: boolean };
+    const Tip = part<Record<string, never>>("adorn-tip", { size: () => v(20, 10), render() {} });
+    const XBtn = part<Record<string, never>>("adorn-x", {
+      size: () => v(16, 16), render() {}, on: [Press(() => ({ kind: "rm" }))],
+    });
+    const HostBase = part<Record<string, never>>("adorn-host", { size: () => v(40, 40), render() {} });
+
+    // A hover-gated tooltip AND an always-present interactive button, both layered on.
+    const Host = derivePart("adorn-host2", HostBase,
+      addAdorn((n) => (n.ch.hover > 0.5 ? [at(Tip("t", {}), v(100, 20))] : [])),
+      addAdorn(() => [at(XBtn("x", {}), v(100, 60))]),
+    );
+
+    const rt = new Runtime<D, { kind: "rm" }>(null, {
+      init: { removed: false },
+      update: (d, i) => (i.kind === "rm" ? { removed: true } : d),
+      view: () => Stack("root", {}, [Host("h", {})]),
+    }, { headless: true, width: 300, height: 200 });
+
+    const adornKeys = () => {
+      const ar = (rt as unknown as { adornRoot: { children: { key: string }[] } | null }).adornRoot;
+      return (ar?.children ?? []).map((c) => c.key).sort();
+    };
+
+    rt.step(5);
+    expect(adornKeys()).toEqual(["h::x"]);          // button present; tooltip gated off
+
+    const host = rt.root.children[0].rect;
+    rt.pointerMove({ x: host.x + 20, y: host.y + 20 });
+    rt.step(20);
+    expect(adornKeys()).toEqual(["h::t", "h::x"]);  // hover → tooltip entered
+
+    rt.pointerMove({ x: 260, y: 180 });
+    rt.step(80);
+    expect(adornKeys()).toEqual(["h::x"]);          // left → tooltip exited + pruned
+
+    // click the interactive button adornment (world rect 100,60,16,16)
+    rt.pointerDown({ x: 108, y: 68 });
+    rt.pointerUp({ x: 108, y: 68 });
+    expect(rt.doc.removed).toBe(true);              // adornment dispatched the host intent
+  });
+});

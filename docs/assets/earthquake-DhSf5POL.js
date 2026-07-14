@@ -1,4 +1,4 @@
-import{p as B,P as D,h as p,v as i,c as m,r as d,d as w,m as P,a as L,e as H}from"./source-panel-CCgHUfrE.js";import{b as Y}from"./effects-BPrdJU6w.js";const M=`// ============================================================================
+import{p as B,P as D,h as p,v as i,c as m,b as d,r as w,m as P,d as L,f as H}from"./source-panel-1CdPGxVg.js";import{b as Y}from"./effects-BLXO7xpg.js";const M=`// ============================================================================
 // Example: earthquake — click anywhere to shake the world apart.
 //
 // A skyline of brick towers sits on the ground. Click (repeatedly!) to trigger

@@ -29,7 +29,7 @@ function placeInst(inst: Instance, target: Rect, eff: Eff, sizes: Map<Instance, 
   inst.target = target;
   const part = eff(inst);
   if (part.place && inst.children.length) {
-    const kids = inst.children.map((c) => ({ key: c.key, size: sizes.get(c)!, props: c.props }));
+    const kids = inst.children.map((c) => ({ key: c.key, size: sizes.get(c)!, props: c.props, pos: c.el.pos }));
     const rects = part.place(inst.props, target, kids);
     inst.children.forEach((c, i) => placeInst(c, rects[i], eff, sizes));
   } else {

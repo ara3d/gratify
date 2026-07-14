@@ -1,13 +1,15 @@
 # Gratify — High-Level Implementation Plan
 
-*Written 2026-07-13. Status 2026-07-14: **M0, M1, M2 complete; M3 core
+*Written 2026-07-13. Status 2026-07-15: **M0, M1, M2 complete; M3 mostly
 complete** — surface-as-part (grid/Pan/Keys), anchors + wire connectors,
-gestures with state/query/overlay-view, impulse channels, viewport layers, and
-the flagship node-editor example whose slice gesture is one app-side file with
-zero framework edits (the acceptance test Kea never passed). Examples:
-counter, todo, toggles, undo, extensions, keyboard-and-drag, node-editor.
-Remaining from M3: local state routing, modal adornments, `adorn` facet,
-dashboard + dropdown examples. M4 not started.*
+gestures with state/query/overlay-view, impulse channels, viewport layers,
+`GNode.time` + `ambient` for time-based motion, and the **`adorn` facet**
+(overlay elements anchored to a host, applied to any widget via `addAdorn`;
+decorative ones pass through, interactive ones capture clicks). Examples:
+counter, todo, toggles, undo, extensions, keyboard-and-drag, node-editor,
+widget-board, borders, combo-button, magnify, earthquake, adornments.
+Remaining from M3: instance-local state routing + modal popups (dropdowns).
+M4 not started.*
 
 *This plan describes how to get from an empty repository to
 the framework the [README](../README.md) promises. The README is the spec: every

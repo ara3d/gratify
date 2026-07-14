@@ -114,7 +114,7 @@ withExt(Button("save", saveProps), outlined);                     // 3. this one
 
 An extension is **just a function from part to part** — no plugin API, no registration, no base class. Name them, compose them, ship them in libraries. Scope 2 is the powerful one: a theme can reach widgets *inside third-party code you can't edit*, and it even reaches parts derived from the one you targeted. (See the [`extensions`](examples/extensions/) example for `mapStyle`, appended channels, and all three scopes running live.)
 
-Tooltips, selection, accessibility labels, undo, debug overlays, whole visual skins — every one is layerable onto a library that never anticipated it.
+Tooltips, badges, selection handles, undo, debug overlays, whole visual skins — every one is layerable onto a library that never anticipated it. Decorations that need to *escape* the widget's bounds or be clickable (a tooltip above it, a close button overhanging its corner) are **adornments** — overlay elements the `addAdorn` extension appends to any host. (See the [`adornments`](examples/adornments/) example.)
 
 ### 4. Styling is arithmetic, not a cascade
 
@@ -208,6 +208,7 @@ Open the [**live gallery**](https://ara3d.github.io/gratify/), or run `npm run d
 | [`combo-button`](examples/combo-button/) | click fast: heat, shake, glow, and particles all build with your click rate |
 | [`magnify`](examples/magnify/) | a bouncing lens fisheye-magnifies the tiles beneath it |
 | [`earthquake`](examples/earthquake/) | click to shake a brick skyline — a fully time-based animation |
+| [`adornments`](examples/adornments/) | tooltips, badges, and close buttons layered onto plain cards by composition (`addAdorn`) |
 
 - **Plan** — how we get from here to everything above: [`docs/plan.md`](docs/plan.md)
 
@@ -226,7 +227,8 @@ interactors (`Press` / `Drag1D` / `Keys` / `Focusable` / `Gesture` with private
 state + scene query + overlay previews), the wrap/append extension algebra at
 three scopes, themes with cross-fade, anchors + connectors, viewport layers
 (world/overlay/screen), impulse channels, an ever-rising `GNode.time` clock with
-an `ambient` keep-awake hook for time-based motion, and undo middleware are all
-working — every claim above has a running example. Not yet: adornments,
-instance-local state, modal popups. Text input is deliberately out of scope for
-now.
+an `ambient` keep-awake hook for time-based motion, anchored adornments (overlay
+elements with their own interactors, applied to any widget by composition), and
+undo middleware are all working — every claim above has a running example. Not
+yet: instance-local state and modal popups (dropdowns). Text input is
+deliberately out of scope for now.

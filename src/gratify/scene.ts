@@ -4,7 +4,7 @@
 // springs and channels, so it always knows where it *was*.
 // ============================================================================
 
-import { Rect, Spring } from "./core";
+import { Rect, Spring, Vec } from "./core";
 import { PartDef } from "./part";
 
 /** Coordinate layers (M3): world is viewport-transformed; overlay is world
@@ -24,7 +24,14 @@ export interface Element {
   /** Coordinate layer: world (viewport-transformed, default), overlay (world
    *  coords, drawn above all content), screen (untransformed HUD). Inherited. */
   layer?: Layer;
+  /** Top-left of this element's rect, in its layer's coordinates. Used by
+   *  `Free` and by adornments; set it with `at(element, pos)`. */
+  pos?: Vec;
 }
+
+/** Position an element (adornments, `Free` children): sets the top-left of its
+ *  rect to `pos` in its layer's coordinates. */
+export const at = (element: Element, pos: Vec): Element => ({ ...element, pos });
 
 export class Instance {
   key: string;

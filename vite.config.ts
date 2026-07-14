@@ -28,6 +28,7 @@ export default defineConfig({
         magnify: resolve(__dirname, "examples/magnify/index.html"),
         earthquake: resolve(__dirname, "examples/earthquake/index.html"),
         "widget-board": resolve(__dirname, "examples/widget-board/index.html"),
+        adornments: resolve(__dirname, "examples/adornments/index.html"),
       },
     },
   },
