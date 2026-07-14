@@ -30,6 +30,8 @@ export interface Painter {
   push(): void;
   pop(): void;
   alpha(a: number): void;
+  /** Offset the coordinate system by (dx, dy). Pair with push()/pop(). */
+  translate(dx: number, dy: number): void;
   scaleAt(cx: number, cy: number, s: number): void;
   screen(dpr: number): void;
   /** Set the world transform (viewport pan/zoom). */
@@ -71,6 +73,7 @@ export class CanvasPainter implements Painter {
   push() { this.ctx.save(); }
   pop() { this.ctx.restore(); }
   alpha(a: number) { this.ctx.globalAlpha *= a; }
+  translate(dx: number, dy: number) { this.ctx.translate(dx, dy); }
   scaleAt(cx: number, cy: number, s: number) {
     this.ctx.translate(cx, cy); this.ctx.scale(s, s); this.ctx.translate(-cx, -cy);
   }
@@ -122,5 +125,5 @@ export class NullPainter implements Painter {
   measure: Measure = { text: (s, size = 13) => ({ x: s.length * size * 0.55, y: size * 1.3 }) };
   clear() {} box() {} label() {} dot() {} ring() {} line() {} wire() {}
   glow(_c: Color, _b: number, draw: () => void) { draw(); }
-  push() {} pop() {} alpha() {} scaleAt() {} screen() {} view() {}
+  push() {} pop() {} alpha() {} translate() {} scaleAt() {} screen() {} view() {}
 }
