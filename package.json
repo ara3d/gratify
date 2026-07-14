@@ -1,0 +1,18 @@
+{
+  "name": "gratify",
+  "version": "0.0.1",
+  "description": "A TypeScript UI framework where everything that changes, animates — and everything you build, composes.",
+  "type": "module",
+  "main": "src/gratify/index.ts",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/check-boundary.mjs && tsc --noEmit && vite build",
+    "check": "node scripts/check-boundary.mjs && tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0",
+    "vitest": "^2.0.0"
+  }
+}

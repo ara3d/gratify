@@ -152,9 +152,22 @@ The through-line: where React and WPF grew a *separate subsystem* per row, Grati
 ## Getting started
 
 ```bash
-npm install gratify
+npm install
+npm run dev      # http://localhost:5199 — the examples gallery
+npm run test     # headless kernel tests (deterministic step())
+npm run check    # boundary check + typecheck
 ```
 
-- **Guide** — the mental model in 15 minutes: `docs/guide.md`
-- **Recipes** — toggles, lists, drag-to-connect, undo, theming: `docs/recipes.md`
-- **Demo** — the node editor Gratify was forged on: `npm run demo`
+- **Plan** — how we get from here to everything above: [`docs/plan.md`](docs/plan.md)
+- **Examples** — each one proves a README claim: [`examples/`](examples/)
+  - `counter` — the hello-world above, running verbatim
+  - `todo` — keyed enter/exit/reflow, zero animation code
+  - `toggles` — custom parts (spring toggle, drag slider) + live theme cross-fade
+  - `undo` — `withUndo(app)` middleware; undo replays enter animations
+
+**Status:** early. The kernel (two-clock loop, keyed reconcile, springs, channels,
+render-on-demand sleep), the `part()` facet model, `Stack`/`Row` layout with
+animated reflow, `Press`/`Drag1D` interactors, themes with cross-fade, and undo
+middleware are working — see the examples. The wrap/append extension algebra,
+gesture views, anchors/connectors, adornments, and local state are designed
+(see the plan) and land next. Text input is deliberately out of scope for now.
