@@ -1,6 +1,6 @@
 # Gratify
 
-*Gratify: because your UI should be satisfying.*
+*Because your UI should be satisfying.*
 
 **A TypeScript UI framework where everything that changes, animates — and everything you build, composes.**
 
