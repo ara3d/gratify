@@ -2,11 +2,11 @@
 
 *Because your UI should be satisfying.*
 
-**A TypeScript UI framework where everything that changes, animates — and everything you build, composes.**
+**Gratify is a TypeScript, canvas-rendered UI framework for building interfaces rich with micro-interactions — where every state change animates itself and every widget composes.**
 
 ### ▶ [Try the live demo](https://ara3d.github.io/gratify/) · [Source on GitHub](https://github.com/ara3d/gratify)
 
-Gratify renders to canvas, keeps a living animated scene in sync with your state, and asks you to learn exactly two mechanisms: **pure functions over state** for describing, and **channels** for changing. Buttons, forms, dashboards, node editors, timelines, games' UI — the same primitives cover all of it.
+It renders your whole UI to a single `<canvas>` (no DOM, no CSS), keeps a living, animated scene in sync with your state, and asks you to learn exactly two mechanisms: **pure functions over state** for *describing* the UI, and **channels** — named numbers that continuously chase their targets — for *changing* it. Hover glows, press dips, spring-loaded toggles, drag-with-momentum, enter/exit, theme cross-fades: the micro-interactions that normally take a pile of hand-written animation code are the default here, for free. Buttons, forms, dashboards, node editors, timelines, game HUDs — the same primitives cover all of it.
 
 > You describe what the UI should be for the current state. Gratify keeps a retained, animated scene in sync with that description. Everything that changes, tweens.
 
@@ -61,6 +61,44 @@ mount(canvas, { init: { count: 0 }, update, view });
 ```
 
 That's a complete app. Notice what you did **not** write: no event-listener plumbing, no "add the label to the panel", no hover handler, no animation code. Yet at runtime the button breathes — it brightens and lifts on hover, sinks on press, and every state change glides instead of snapping.
+
+---
+
+## Architecture
+
+Gratify runs on **two clocks**. The *state clock* turns only when an intent arrives (a few times a second at most): it folds the intent into a new immutable `Doc`, then re-derives a cheap `Element` description with `view(doc)`. That description is reconciled — matched by key — against a *retained* `Instance` tree, so a widget keeps its springs and channels across rebuilds and always knows where it *was*. The *frame clock* then does the smooth work every frame: lay out (reflowing via springs), step each channel toward its target, resolve `style`, and paint to the canvas. When nothing is moving, the frame loop **sleeps** — an idle UI costs zero CPU.
+
+```mermaid
+flowchart TD
+    Input["input — pointer / keyboard"]
+
+    subgraph SC["STATE CLOCK · on each intent (a few ×/sec)"]
+      direction TB
+      Doc["Doc — immutable state you own"]
+      Update["update(doc, intent) → Doc"]
+      View["view(doc) → Element tree (pure description)"]
+      Update --> Doc --> View
+    end
+
+    subgraph FC["FRAME CLOCK · every frame · sleeps at rest"]
+      direction TB
+      Inst["Instance tree — retained; keeps springs + channels"]
+      Layout["layout — measure / place, reflow via springs"]
+      Chan["channels — chase targets (spring / ease)"]
+      Paint["paint — style(tokens, ch, props) → render()"]
+      Inst --> Layout --> Chan --> Paint
+    end
+
+    Input -->|"interactors emit intents"| Update
+    View -->|"reconcile — match by key, reuse instances"| Inst
+    Paint --> Canvas(["&lt;canvas&gt;"])
+```
+
+**The three moving parts of every widget:**
+
+- A **part** is a bundle of small *facets* — `size`/`measure` (geometry), `style` (tokens + channels → resolved values), `render` (paint the values), `body` (compose child parts), `on` (interactors), plus `channels`, `anchors`, `adorn`. All optional; you write only what a given widget needs.
+- **Channels** are the animation substrate. There are no timelines or `animate()` calls — every visual number is a channel chasing a state-derived target, so motion is a side effect of *describing* the target, not of scripting the transition.
+- **Extensions** (`mapStyle`, `mapRender`, `addOn`, `mapBody`, …) wrap or append facets, and apply at three scopes — one part definition, a whole theme, or a single element — so you customize by composition, never by editing.
 
 ---
 
@@ -185,32 +223,20 @@ npm run test     # headless kernel tests (deterministic step())
 npm run check    # boundary check + typecheck
 ```
 
-Open the [**live gallery**](https://ara3d.github.io/gratify/), or run `npm run dev`. Every example page shows its own source next to the running app, so you can read exactly the code that produced what you're looking at.
+Every idea above has a running example. Rather than list them here, browse the **[live gallery ▶](https://ara3d.github.io/gratify/)** (or run `npm run dev`) — from the hello-world counter through a full pan/zoom node editor and a 15-control widget board. Each page shows its own source next to the running app, so you can read exactly the code that produced what you're looking at.
 
-**Start with these** — one idea each:
+- **Plan** — the roadmap and design record: [`docs/plan.md`](docs/plan.md)
 
-| Example | What it teaches |
-|---|---|
-| [`counter`](examples/counter/) | the hello-world above, running verbatim |
-| [`todo`](examples/todo/) | keyed enter / exit / reflow, with zero animation code |
-| [`toggles`](examples/toggles/) | custom parts (spring toggle, drag slider) + a live theme cross-fade |
-| [`undo`](examples/undo/) | `withUndo(app)` middleware — undo replays enter animations |
-| [`extensions`](examples/extensions/) | wrap / append at all three scopes (definition, theme, use site) |
-| [`keyboard-and-drag`](examples/keyboard-and-drag/) | `Focusable` + `Keys` + a reorder gesture, composed on one part |
+---
 
-**Then the bigger ones** — editor-grade UI, juice, and a widget library:
+## Related projects
 
-| Example | What it shows |
-|---|---|
-| [`node-editor`](examples/node-editor/) | pan/zoom surface, anchored wires you can click and cut, magnetic wire-drag, and a Shift-drag "slice" gesture in one app-side file |
-| [`widget-board`](examples/widget-board/) | 15 creative-tool controls — sliders, ranges, angles, arcs, XY / box 2D / box 3D, color wheel, gradient — on a pannable canvas |
-| [`borders`](examples/borders/) | none / single / double / sunken / raised bevels that flip when pressed |
-| [`combo-button`](examples/combo-button/) | click fast: heat, shake, glow, and particles all build with your click rate |
-| [`magnify`](examples/magnify/) | a bouncing lens fisheye-magnifies the tiles beneath it |
-| [`earthquake`](examples/earthquake/) | click to shake a brick skyline — a fully time-based animation |
-| [`adornments`](examples/adornments/) | tooltips, badges, and close buttons layered onto plain cards by composition (`addAdorn`) |
+Gratify comes out of the [**Ara 3D**](https://github.com/ara3d) ecosystem and a lineage of value-oriented, immutable design:
 
-- **Plan** — how we get from here to everything above: [`docs/plan.md`](docs/plan.md)
+- [**Plato**](https://github.com/cdiggins/plato) — a pure, functional programming language by the same author. Its value-first, immutable philosophy is the intellectual root of Gratify's "pure `view(doc)`, no hidden state" model.
+- [**Ara 3D SDK**](https://github.com/ara3d/ara3d-sdk) — the .NET toolkit for high-performance 3D and AEC/BIM data that this work supports.
+- [**Plato.Geometry**](https://github.com/ara3d/Plato.Geometry) — a cross-platform geometry library generated from Plato.
+- **Kea** *(predecessor)* — the earlier canvas-UI experiment Gratify distilled its layering model from; **PeacockV2** *(planned)* is a C# sibling that will apply the same architecture on immutable records.
 
 ### Writing Gratify code (humans and AI agents)
 
