@@ -98,6 +98,14 @@ export class Runtime<TDoc, TIntent> {
     return v((p.x - this.viewport.pan.x) / this.viewport.zoom, (p.y - this.viewport.pan.y) / this.viewport.zoom);
   }
 
+  /** The composed ("effective") part definition for an instance, after all
+   *  layering scopes are applied: definition → theme extensions → use-site
+   *  extensions. This is the answer to "why does this widget look/behave
+   *  like this?" — for tests, inspectors, and debug tooling. */
+  effectiveDef(inst: Instance): AnyDef {
+    return this.effs.get(inst);
+  }
+
   // ---- the query capability (read-only scene access for gestures/effects) ----
   readonly query: Query = {
     anchor: (id) => this.anchorMap.get(id),
