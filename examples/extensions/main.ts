@@ -23,7 +23,7 @@
 
 import {
   addChannels,        // append animated channels to a part
-  calpha, Channels, Color,
+  calpha, Channels,
   derivePart,         // scope 1: bake extensions into a new named part
   extendTheme,        // scope 2: extend a part app-wide while a theme is active
   clearThemeExt,      //          …and remove that again
@@ -35,10 +35,11 @@ import {
   PartExt,
   rect, rgb,
   Stack, Row, Label,
+  SurfaceStyle,       // the shared { fill, edge, text } restyle protocol
   Tokens,
   withExt,            // scope 3: apply to one element at its use site
 } from "gratify";
-import { Button, Toggle } from "../shared/widgets";
+import { Button, Card, Checkbox, Toggle } from "../shared/widgets";
 
 import { attachSourcePanel } from "../shared/source-panel";
 import mainSource from "./main.ts?raw";
@@ -80,11 +81,11 @@ const sheen: PartExt = (definition) => {
 const chunky: PartExt = mapSize((_props, _measure, baseSize) =>
   ({ x: baseSize.x + 16, y: Math.max(baseSize.y, 44) }));
 
-// 4. "Neon": a THEME-scope restyle. mapStyle receives the base style record,
-//    so we state only the fields we change — never restating the rest.
-interface Restylable { fill: Color; edge: Color; text: Color; }
-
-const neon: PartExt = mapStyle<Restylable>(
+// 4. "Neon": a THEME-scope restyle written against the SHARED SurfaceStyle
+//    protocol — { fill, edge, text }. Because Button, Checkbox and Card all
+//    expose those fields, this ONE definition restyles all three part kinds.
+//    mapStyle receives the base record, so we state only what we change.
+const neon: PartExt = mapStyle<SurfaceStyle>(
   (tokens: Tokens, channels: Channels, _props, baseStyle) => ({
     ...baseStyle,
     fill: tokens.mix(baseStyle.fill, tokens.accent2, 0.35 + 0.3 * channels.hover),
@@ -92,6 +93,9 @@ const neon: PartExt = mapStyle<Restylable>(
     text: tokens.textBright,
   }),
 );
+
+/** The parts the neon theme restyle reaches — one extension, three kinds. */
+const NEON_PARTS = ["button", "checkbox", "card"];
 
 // ── Scope 1: a new named part with the sheen baked in ─────────────────────────
 
@@ -114,12 +118,12 @@ function update(document: ExtensionsDocument, intent: ExtensionsIntent): Extensi
 
     case "toggle-neon": {
       const neonActive = !document.neonActive;
-      if (neonActive) {
-        // Scope 2: every part named "button" — or DERIVED from it, like
-        // FancyButton — gets the neon restyle while the dark theme is active.
-        extendTheme("dark", "button", neon as (definition: unknown) => unknown);
-      } else {
-        clearThemeExt("dark", "button");
+      // Scope 2: while the dark theme is active, every button (incl. DERIVED
+      // parts like FancyButton), checkbox and card gets the neon restyle — one
+      // extension reaching three different part kinds via the shared protocol.
+      for (const name of NEON_PARTS) {
+        if (neonActive) extendTheme("dark", name, neon as (definition: unknown) => unknown);
+        else clearThemeExt("dark", name);
       }
       return { ...document, neonActive };
     }
@@ -152,8 +156,17 @@ function view(document: ExtensionsDocument) {
     ]),
 
     Row("theme-row", { gap: 14 }, [
-      Label("theme-caption", { text: "Neon all buttons (theme scope)", dim: true }),
+      Label("theme-caption", { text: "Neon (theme scope — one restyle, three part kinds)", dim: true }),
       Toggle("neon-toggle", { on: document.neonActive, flip: { kind: "toggle-neon" } }),
+    ]),
+
+    // A card and a checkbox, so the neon toggle demonstrably reaches part kinds
+    // it was never written for — the SurfaceStyle protocol is what they share.
+    Card("neon-card", { title: "Card", value: "surface" }, [
+      Row("card-row", { gap: 10 }, [
+        Checkbox("cb", { on: document.neonActive, toggle: { kind: "toggle-neon" } }),
+        Label("cb-label", { text: "same protocol", dim: true }),
+      ]),
     ]),
 
     Label("hint", {

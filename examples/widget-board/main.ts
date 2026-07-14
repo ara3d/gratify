@@ -1,40 +1,36 @@
 // ============================================================================
 // Example: widget board — a dozen-plus creative-tool controls, reimplemented
-// from the Kea node editor's widget library.
+// from the Kea node editor's widget library, now as COMPOSITES.
 //
-// Everything here sits on a pannable canvas (drag empty space to pan, wheel to
-// zoom — the surface is a part with Pan(), exactly like the node editor). Each
-// widget is ONE part() definition: it draws its own card, and it reads the
-// pointer in world coordinates to drive its gesture. The controls shown:
+// Every card is the shared `Card` part (widgets.ts) used 15 times: its body
+// facet supplies the title/value chrome and a content slot. Into that slot goes
+// ONE interactive control part — a standalone part sized by layout, so it reads
+// its OWN rect (no `innerOf(card)` offset math) and its gesture works in its
+// own coordinates. And no control reads the `tokens` singleton: colors resolve
+// in a `style` facet, so each control is restylable and themable (enforced by
+// `npm run check`).
 //
-//   Slider · Range · Number scrub · Knob · Angle dial · Angle range ·
-//   XY pad (vector 2) · Box 2D (bounds) · Box 3D (orbit cube) · Color wheel ·
-//   Gradient ramp · Toggle · Checkbox · Segmented · Vector 3
-//
-// The point: none of these needed new framework features. Sliders and gradients
-// use Drag1D; everything spatial uses Gesture (private state + the pointer in
-// world space); toggles and checkboxes spring via a declared channel.
+// Everything sits on a pannable canvas (drag empty space to pan, wheel to
+// zoom). The controls: Slider · Range · Number scrub · Knob · Angle dial ·
+// Angle range · XY pad · Box 2D · Box 3D · Color wheel · Gradient ramp ·
+// Toggle · Checkbox · Segmented · Vector 3.
 // ============================================================================
 
 import {
   calpha, clamp, cmix, Color, Drag1D, Free, Gesture, GNode, hexOf, hsl, mount,
-  Painter, Pan, part, Press, rect, Rect, tokens, v, Vec, vdist, Element,
+  Painter, Pan, part, Press, rect, Rect, Tokens, Channels, v, Vec, vdist, Element,
 } from "gratify";
+import { Card } from "../shared/widgets";
 
 import { attachSourcePanel } from "../shared/source-panel";
 import mainSource from "./main.ts?raw";
+import widgetsSource from "../shared/widgets.ts?raw";
 
-// ── Card geometry + shared drawing helpers ────────────────────────────────────
-
-const CARD_W = 212;
-const CARD_H = 142;
-const PAD_X = 14;
-const TOP = 32;
-const BOTTOM = 14;
-
-/** The inner content area of a card (below the title strip). */
-const innerOf = (r: Rect): Rect =>
-  rect(r.x + PAD_X, r.y + TOP, r.w - 2 * PAD_X, r.h - TOP - BOTTOM);
+// ── Content geometry ──────────────────────────────────────────────────────────
+// Each control declares this intrinsic size; the Card's Stack pads around it, so
+// the card ends up ~212×148 — the layout does the arithmetic, not the widget.
+const CW = 184;   // content width
+const CH = 92;    // content height
 
 /** Largest centered square inside a rect (for the spatial widgets). */
 function squareIn(r: Rect): Rect {
@@ -42,32 +38,34 @@ function squareIn(r: Rect): Rect {
   return rect(r.center.x - s / 2, r.center.y - s / 2, s, s);
 }
 
-/** Draw a card's frame + title + value readout; return the inner content rect. */
-function card(paint: Painter, node: GNode<unknown>, title: string, value: string): Rect {
-  const r = node.rect;
-  const hover = node.ch.hover;
-  const fill = tokens.mix(tokens.surface, tokens.surfaceHi, 0.35 + 0.4 * hover);
-  const edge = tokens.mix(tokens.muted, tokens.accent, 0.2 + 0.5 * hover);
-  paint.box(r, 10, fill, edge, 1);
-  paint.label(title, v(r.x + 12, r.y + 16),
-    tokens.mix(tokens.textDim, tokens.textBright, 0.4 + 0.6 * hover),
-    { align: "left", weight: 600, size: 12 });
-  paint.label(value, v(r.right - 12, r.y + 16), calpha(tokens.accent, 0.95),
-    { align: "right", size: 11, mono: true });
-  return innerOf(r);
+// ── The control palette recipe + shared drawing helpers ───────────────────────
+// One recipe resolves the colors every control shares; each control's `style`
+// spreads it and adds its own fields. Because it takes (Tokens, Channels), the
+// only way to reach a token is from inside a style function — the pit of success.
+interface Ctrl {
+  muted: Color; accent: Color; bright: Color; dim: Color; well: Color;
+  thumb: Color; glow: number;
 }
+const ctrl = (t: Tokens, ch: Channels): Ctrl => ({
+  muted: t.muted,
+  accent: t.accent,
+  bright: t.textBright,
+  dim: t.textDim,
+  well: calpha(t.bg, 0.5),
+  thumb: t.mix(t.textBright, t.accent, 0.3 * (ch.hover || 0)),
+  glow: 9 * (ch.hover || 0),
+});
 
-/** A horizontal track filled to fraction `t`. */
-function track(paint: Painter, r: Rect, t: number, fill = tokens.accent) {
+/** A horizontal track filled to fraction `frac`. */
+function track(paint: Painter, r: Rect, frac: number, muted: Color, fill: Color) {
   const y = r.center.y;
-  paint.box(rect(r.x, y - 2.5, r.w, 5), 2.5, tokens.muted);
-  if (t > 0) paint.box(rect(r.x, y - 2.5, r.w * clamp(t, 0, 1), 5), 2.5, fill);
+  paint.box(rect(r.x, y - 2.5, r.w, 5), 2.5, muted);
+  if (frac > 0) paint.box(rect(r.x, y - 2.5, r.w * clamp(frac, 0, 1), 5), 2.5, fill);
 }
 
 /** A draggable thumb, brighter and glowing as `hot` rises. */
-function thumb(paint: Painter, p: Vec, radius: number, hot: number) {
-  paint.glow(tokens.accent, 9 * hot, () =>
-    paint.dot(p, radius, tokens.mix(tokens.textBright, tokens.accent, 0.3 * hot)));
+function thumb(paint: Painter, p: Vec, radius: number, glow: number, accent: Color, core: Color) {
+  paint.glow(accent, glow, () => paint.dot(p, radius, core));
 }
 
 const TAU = Math.PI * 2;
@@ -130,46 +128,44 @@ function update(doc: Doc, intent: Intent): Doc {
   }
 }
 
-// Every widget carries its board position so the Free container can place it.
-type Pos = { pos: Vec };
-
 // ── 1. Slider (scalar 0..1) — Drag1D ──────────────────────────────────────────
 
-const Slider = part<Pos & { value: number }>("w-slider", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
-    const inner = card(paint, node, "Slider", node.props.value.toFixed(2));
-    const bar = rect(inner.x, inner.center.y - 10, inner.w, 20);
-    track(paint, bar, node.props.value);
-    thumb(paint, v(bar.x + bar.w * node.props.value, bar.center.y), 7 + 1.5 * node.ch.hover, node.ch.hover);
+const SliderCtl = part<{ value: number }>()("w-slider", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
+    const r = node.rect;
+    const bar = rect(r.x + 8, r.center.y - 10, r.w - 16, 20);
+    track(paint, bar, node.props.value, s.muted, s.accent);
+    thumb(paint, v(bar.x + bar.w * node.props.value, bar.center.y), 7 + 1.5 * node.ch.hover, s.glow, s.accent, s.thumb);
   },
-  // Drag1D's `pad` matches the card's PAD_X, so the fraction lines up with the bar.
-  on: [Drag1D({ axis: "x", pad: PAD_X, to: (_n, f) => ({ kind: "scalar", value: f }) })],
+  on: [Drag1D({ axis: "x", pad: 8, to: (_n, f) => ({ kind: "scalar", value: f }) })],
 });
 
 // ── 2. Range (min..max) — Gesture, nearest thumb ──────────────────────────────
 
-const Range = part<Pos & { min: number; max: number }>("w-range", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
-    const p = node.props;
-    const inner = card(paint, node, "Range", `${p.min.toFixed(2)}–${p.max.toFixed(2)}`);
+const RangeCtl = part<{ min: number; max: number }>()("w-range", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
+    const p = node.props, r = node.rect;
+    const inner = rect(r.x + 8, r.y, r.w - 16, r.h);
     const y = inner.center.y;
-    paint.box(rect(inner.x, y - 2.5, inner.w, 5), 2.5, tokens.muted);
+    paint.box(rect(inner.x, y - 2.5, inner.w, 5), 2.5, s.muted);
     const xMin = inner.x + inner.w * p.min, xMax = inner.x + inner.w * p.max;
-    paint.box(rect(xMin, y - 2.5, xMax - xMin, 5), 2.5, tokens.accent);
-    thumb(paint, v(xMin, y), 7, node.ch.hover);
-    thumb(paint, v(xMax, y), 7, node.ch.hover);
+    paint.box(rect(xMin, y - 2.5, xMax - xMin, 5), 2.5, s.accent);
+    thumb(paint, v(xMin, y), 7, s.glow, s.accent, s.thumb);
+    thumb(paint, v(xMax, y), 7, s.glow, s.accent, s.thumb);
   },
   on: [
-    Gesture<Pos & { min: number; max: number }, { which: "min" | "max" }>({
+    Gesture<{ min: number; max: number }, { which: "min" | "max" }>({
       begin(node, pointer) {
-        const inner = innerOf(node.rect);
+        const inner = rect(node.rect.x + 8, node.rect.y, node.rect.w - 16, node.rect.h);
         const f = clamp((pointer.x - inner.x) / inner.w, 0, 1);
         return { which: Math.abs(f - node.props.min) <= Math.abs(f - node.props.max) ? "min" : "max" };
       },
       during(state, node, pointer) {
-        const inner = innerOf(node.rect);
+        const inner = rect(node.rect.x + 8, node.rect.y, node.rect.w - 16, node.rect.h);
         const f = clamp((pointer.x - inner.x) / inner.w, 0, 1);
         const { min, max } = node.props;
         const value = state.which === "min" ? { min: Math.min(f, max), max } : { min, max: Math.max(f, min) };
@@ -181,17 +177,16 @@ const Range = part<Pos & { min: number; max: number }>("w-range", {
 
 // ── 3. Number scrub — Gesture, relative horizontal drag ───────────────────────
 
-const NumberScrub = part<Pos & { value: number }>("w-scrub", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
-    const inner = card(paint, node, "Number", node.props.value.toFixed(1));
-    paint.label(node.props.value.toFixed(1), inner.center,
-      tokens.mix(tokens.text, tokens.textBright, node.ch.hover), { size: 26, weight: 700 });
-    paint.label("‹ drag horizontally ›", v(inner.center.x, inner.bottom - 6),
-      calpha(tokens.textDim, 0.8), { size: 10 });
+const NumberScrubCtl = part<{ value: number }>()("w-scrub", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ({ ...ctrl(t, ch), text: t.mix(t.text, t.textBright, ch.hover || 0) }),
+  render: (node, paint, s) => {
+    const r = node.rect;
+    paint.label(node.props.value.toFixed(1), r.center, s.text, { size: 26, weight: 700 });
+    paint.label("‹ drag horizontally ›", v(r.center.x, r.bottom - 6), calpha(s.dim, 0.8), { size: 10 });
   },
   on: [
-    Gesture<Pos & { value: number }, { start: number; startX: number }>({
+    Gesture<{ value: number }, { start: number; startX: number }>({
       begin: (node, pointer) => ({ start: node.props.value, startX: pointer.x }),
       during: (state, _node, pointer) => ({ kind: "scrub", value: state.start + (pointer.x - state.startX) * 0.5 }),
     }),
@@ -200,22 +195,21 @@ const NumberScrub = part<Pos & { value: number }>("w-scrub", {
 
 // ── 4. Knob (rotary) — Gesture, vertical drag ─────────────────────────────────
 
-const Knob = part<Pos & { value: number }>("w-knob", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
-    const inner = card(paint, node, "Knob", `${Math.round(node.props.value * 100)}%`);
-    const sq = squareIn(inner);
+const KnobCtl = part<{ value: number }>()("w-knob", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
+    const sq = squareIn(node.rect);
     const c = sq.center, radius = sq.w / 2 - 6;
-    paint.ring(c, radius, tokens.muted, 3);
-    // 270° sweep from 135° to 405°.
-    const a = (0.75 + node.props.value * 1.5) * Math.PI;
+    paint.ring(c, radius, s.muted, 3);
+    const a = (0.75 + node.props.value * 1.5) * Math.PI;   // 270° sweep from 135°
     const tip = v(c.x + Math.cos(a) * radius, c.y + Math.sin(a) * radius);
-    paint.line(c, tip, tokens.accent, 3);
-    thumb(paint, tip, 5 + node.ch.hover * 2, node.ch.hover);
-    paint.dot(c, 3, tokens.textDim);
+    paint.line(c, tip, s.accent, 3);
+    thumb(paint, tip, 5 + node.ch.hover * 2, s.glow, s.accent, s.thumb);
+    paint.dot(c, 3, s.dim);
   },
   on: [
-    Gesture<Pos & { value: number }, { start: number; startY: number }>({
+    Gesture<{ value: number }, { start: number; startY: number }>({
       begin: (node, pointer) => ({ start: node.props.value, startY: pointer.y }),
       during: (state, _node, pointer) =>
         ({ kind: "knob", value: clamp(state.start - (pointer.y - state.startY) * 0.006, 0, 1) }),
@@ -225,24 +219,24 @@ const Knob = part<Pos & { value: number }>("w-knob", {
 
 // ── 5. Angle dial (0..360°) — Gesture, absolute angle ─────────────────────────
 
-const AngleDial = part<Pos & { angle: number }>("w-angle", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
-    const inner = card(paint, node, "Angle", `${Math.round(node.props.angle)}°`);
-    const sq = squareIn(inner);
+const AngleDialCtl = part<{ angle: number }>()("w-angle", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
+    const sq = squareIn(node.rect);
     const c = sq.center, radius = sq.w / 2 - 6;
-    paint.ring(c, radius, tokens.muted, 2);
+    paint.ring(c, radius, s.muted, 2);
     const a = (node.props.angle * Math.PI) / 180;
     const tip = v(c.x + Math.cos(a) * radius, c.y + Math.sin(a) * radius);
-    paint.line(c, tip, tokens.accent, 2.5);
-    thumb(paint, tip, 5 + node.ch.hover * 2, node.ch.hover);
-    paint.dot(c, 3, tokens.textDim);
+    paint.line(c, tip, s.accent, 2.5);
+    thumb(paint, tip, 5 + node.ch.hover * 2, s.glow, s.accent, s.thumb);
+    paint.dot(c, 3, s.dim);
   },
   on: [
-    Gesture<Pos & { angle: number }, Record<string, never>>({
+    Gesture<{ angle: number }, Record<string, never>>({
       begin: () => ({}),
       during(_state, node, pointer) {
-        const c = squareIn(innerOf(node.rect)).center;
+        const c = squareIn(node.rect).center;
         return { kind: "angle", value: degOf(Math.atan2(pointer.y - c.y, pointer.x - c.x)) };
       },
     }),
@@ -261,30 +255,30 @@ function drawArc(paint: Painter, c: Vec, radius: number, a0: number, a1: number,
   }
 }
 
-const AngleRange = part<Pos & { start: number; end: number }>("w-arc", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
+const AngleRangeCtl = part<{ start: number; end: number }>()("w-arc", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
     const p = node.props;
-    const inner = card(paint, node, "Arc", `${Math.round(p.start)}°–${Math.round(p.end)}°`);
-    const sq = squareIn(inner);
+    const sq = squareIn(node.rect);
     const c = sq.center, radius = sq.w / 2 - 6;
-    paint.ring(c, radius, tokens.muted, 1.5);
-    drawArc(paint, c, radius, p.start, p.end, tokens.accent);
+    paint.ring(c, radius, s.muted, 1.5);
+    drawArc(paint, c, radius, p.start, p.end, s.accent);
     for (const angle of [p.start, p.end]) {
       const a = (angle * Math.PI) / 180;
-      thumb(paint, v(c.x + Math.cos(a) * radius, c.y + Math.sin(a) * radius), 5 + node.ch.hover * 2, node.ch.hover);
+      thumb(paint, v(c.x + Math.cos(a) * radius, c.y + Math.sin(a) * radius), 5 + node.ch.hover * 2, s.glow, s.accent, s.thumb);
     }
   },
   on: [
-    Gesture<Pos & { start: number; end: number }, { which: "start" | "end" }>({
+    Gesture<{ start: number; end: number }, { which: "start" | "end" }>({
       begin(node, pointer) {
-        const c = squareIn(innerOf(node.rect)).center;
+        const c = squareIn(node.rect).center;
         const a = degOf(Math.atan2(pointer.y - c.y, pointer.x - c.x));
         const dist = (x: number) => Math.min((a - x + 360) % 360, (x - a + 360) % 360);
         return { which: dist(node.props.start) <= dist(node.props.end) ? "start" : "end" };
       },
       during(state, node, pointer) {
-        const c = squareIn(innerOf(node.rect)).center;
+        const c = squareIn(node.rect).center;
         const a = degOf(Math.atan2(pointer.y - c.y, pointer.x - c.x));
         return { kind: "arc", value: { ...node.props, [state.which]: a } as { start: number; end: number } };
       },
@@ -294,23 +288,23 @@ const AngleRange = part<Pos & { start: number; end: number }>("w-arc", {
 
 // ── 7. XY pad (vector 2) — Gesture ────────────────────────────────────────────
 
-const XYPad = part<Pos & { x: number; y: number }>("w-xy", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
+const XYPadCtl = part<{ x: number; y: number }>()("w-xy", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
     const p = node.props;
-    const inner = card(paint, node, "Vector 2", `${p.x.toFixed(2)}, ${p.y.toFixed(2)}`);
-    const sq = squareIn(inner);
-    paint.box(sq, 6, calpha(tokens.bg, 0.5), tokens.muted, 1);
-    paint.line(v(sq.x, sq.center.y), v(sq.right, sq.center.y), calpha(tokens.muted, 0.6));
-    paint.line(v(sq.center.x, sq.y), v(sq.center.x, sq.bottom), calpha(tokens.muted, 0.6));
+    const sq = squareIn(node.rect);
+    paint.box(sq, 6, s.well, s.muted, 1);
+    paint.line(v(sq.x, sq.center.y), v(sq.right, sq.center.y), calpha(s.muted, 0.6));
+    paint.line(v(sq.center.x, sq.y), v(sq.center.x, sq.bottom), calpha(s.muted, 0.6));
     const dot = v(sq.center.x + (p.x * sq.w) / 2, sq.center.y - (p.y * sq.h) / 2);
-    thumb(paint, dot, 6 + node.ch.hover * 2, node.ch.hover);
+    thumb(paint, dot, 6 + node.ch.hover * 2, s.glow, s.accent, s.thumb);
   },
   on: [
-    Gesture<Pos & { x: number; y: number }, Record<string, never>>({
+    Gesture<{ x: number; y: number }, Record<string, never>>({
       begin: () => ({}),
       during(_state, node, pointer) {
-        const sq = squareIn(innerOf(node.rect));
+        const sq = squareIn(node.rect);
         return { kind: "xy", value: {
           x: clamp(((pointer.x - sq.center.x) / (sq.w / 2)), -1, 1),
           y: clamp((-(pointer.y - sq.center.y) / (sq.h / 2)), -1, 1),
@@ -322,24 +316,24 @@ const XYPad = part<Pos & { x: number; y: number }>("w-xy", {
 
 // ── 8. Box 2D (bounds) — Gesture, nearest corner ──────────────────────────────
 
-const Box2D = part<Pos & Doc["box"]>("w-box2d", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
+const Box2DCtl = part<Doc["box"]>()("w-box2d", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
     const p = node.props;
-    const inner = card(paint, node, "Bounds 2D", `${p.minX.toFixed(1)},${p.minY.toFixed(1)}→${p.maxX.toFixed(1)},${p.maxY.toFixed(1)}`);
-    const sq = squareIn(inner);
-    paint.box(sq, 6, calpha(tokens.bg, 0.5), tokens.muted, 1);
+    const sq = squareIn(node.rect);
+    paint.box(sq, 6, s.well, s.muted, 1);
     const toScreen = (fx: number, fy: number) => v(sq.x + fx * sq.w, sq.bottom - fy * sq.h);   // y up
     const a = toScreen(p.minX, p.minY), b = toScreen(p.maxX, p.maxY);
     paint.box(rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y)), 3,
-      calpha(tokens.accent, 0.2), tokens.accent, 1.5);
-    thumb(paint, a, 5 + node.ch.hover, node.ch.hover);
-    thumb(paint, b, 5 + node.ch.hover, node.ch.hover);
+      calpha(s.accent, 0.2), s.accent, 1.5);
+    thumb(paint, a, 5 + node.ch.hover, s.glow, s.accent, s.thumb);
+    thumb(paint, b, 5 + node.ch.hover, s.glow, s.accent, s.thumb);
   },
   on: [
-    Gesture<Pos & Doc["box"], { corner: "min" | "max" }>({
+    Gesture<Doc["box"], { corner: "min" | "max" }>({
       begin(node, pointer) {
-        const sq = squareIn(innerOf(node.rect));
+        const sq = squareIn(node.rect);
         const p = node.props;
         const toScreen = (fx: number, fy: number) => v(sq.x + fx * sq.w, sq.bottom - fy * sq.h);
         const dMin = vdist(pointer, toScreen(p.minX, p.minY));
@@ -347,7 +341,7 @@ const Box2D = part<Pos & Doc["box"]>("w-box2d", {
         return { corner: dMin <= dMax ? "min" : "max" };
       },
       during(state, node, pointer) {
-        const sq = squareIn(innerOf(node.rect));
+        const sq = squareIn(node.rect);
         const fx = clamp((pointer.x - sq.x) / sq.w, 0, 1);
         const fy = clamp((sq.bottom - pointer.y) / sq.h, 0, 1);
         const p = node.props;
@@ -371,12 +365,12 @@ for (let i = 0; i < 8; i++)
     if (d === 1 || d === 2 || d === 4) CUBE_EDGES.push([i, j]);
   }
 
-const Box3D = part<Pos & { yaw: number; pitch: number }>("w-box3d", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
+const Box3DCtl = part<{ yaw: number; pitch: number }>()("w-box3d", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
     const { yaw, pitch } = node.props;
-    const inner = card(paint, node, "Box 3D", `${Math.round(degOf(yaw))}°`);
-    const sq = squareIn(inner);
+    const sq = squareIn(node.rect);
     const c = sq.center, scale = sq.w / 2 - 8;
     const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
     const project = ([x, y, z]: [number, number, number]): Vec => {
@@ -386,17 +380,17 @@ const Box3D = part<Pos & { yaw: number; pitch: number }>("w-box3d", {
       return v(c.x + x1 * scale * persp, c.y + y2 * scale * persp);
     };
     const pts = CUBE_VERTS.map(project);
-    for (const [i, j] of CUBE_EDGES) paint.line(pts[i], pts[j], calpha(tokens.accent, 0.85), 1.5);
-    for (const p of pts) paint.dot(p, 2.5, tokens.textBright);
+    for (const [i, j] of CUBE_EDGES) paint.line(pts[i], pts[j], calpha(s.accent, 0.85), 1.5);
+    for (const p of pts) paint.dot(p, 2.5, s.bright);
   },
   on: [
-    Gesture<Pos & { yaw: number; pitch: number }, { yaw: number; pitch: number; x: number; y: number }>({
+    Gesture<{ yaw: number; pitch: number }, { yaw: number; pitch: number; x: number; y: number }>({
       begin: (node, pointer) => ({ yaw: node.props.yaw, pitch: node.props.pitch, x: pointer.x, y: pointer.y }),
-      during: (s, _node, pointer) => ({
+      during: (st, _node, pointer) => ({
         kind: "cube",
         value: {
-          yaw: s.yaw + (pointer.x - s.x) * 0.012,
-          pitch: clamp(s.pitch + (pointer.y - s.y) * 0.012, -1.3, 1.3),
+          yaw: st.yaw + (pointer.x - st.x) * 0.012,
+          pitch: clamp(st.pitch + (pointer.y - st.y) * 0.012, -1.3, 1.3),
         },
       }),
     }),
@@ -405,12 +399,12 @@ const Box3D = part<Pos & { yaw: number; pitch: number }>("w-box3d", {
 
 // ── 10. Color wheel (HSV) — Gesture ───────────────────────────────────────────
 
-const ColorWheel = part<Pos & { hue: number; sat: number }>("w-color", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
+const ColorWheelCtl = part<{ hue: number; sat: number }>()("w-color", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
     const { hue, sat } = node.props;
-    const inner = card(paint, node, "Color", hexOf(hsl(hue * 360, sat, 0.55)));
-    const sq = squareIn(inner);
+    const sq = squareIn(node.rect);
     const c = sq.center, radius = sq.w / 2 - 4;
     for (let i = 0; i < 72; i++) {                    // the hue ring
       const a = (i / 72) * TAU;
@@ -418,13 +412,13 @@ const ColorWheel = part<Pos & { hue: number; sat: number }>("w-color", {
     }
     paint.dot(c, radius - 8, hsl(hue * 360, sat, 0.55));   // selected color, center
     const a = hue * TAU, rr = sat * (radius - 8);
-    thumb(paint, v(c.x + Math.cos(a) * rr, c.y + Math.sin(a) * rr), 5 + node.ch.hover * 2, node.ch.hover);
+    thumb(paint, v(c.x + Math.cos(a) * rr, c.y + Math.sin(a) * rr), 5 + node.ch.hover * 2, s.glow, s.accent, s.thumb);
   },
   on: [
-    Gesture<Pos & { hue: number; sat: number }, Record<string, never>>({
+    Gesture<{ hue: number; sat: number }, Record<string, never>>({
       begin: () => ({}),
       during(_state, node, pointer) {
-        const sq = squareIn(innerOf(node.rect));
+        const sq = squareIn(node.rect);
         const c = sq.center, radius = sq.w / 2 - 12;
         const dx = pointer.x - c.x, dy = pointer.y - c.y;
         return { kind: "color", value: {
@@ -441,51 +435,56 @@ const ColorWheel = part<Pos & { hue: number; sat: number }>("w-color", {
 const RAMP_A = hsl(205, 0.75, 0.55);
 const RAMP_B = hsl(330, 0.75, 0.58);
 
-const Gradient = part<Pos & { at: number }>("w-gradient", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
-    const at = node.props.at;
-    const inner = card(paint, node, "Gradient", hexOf(cmix(RAMP_A, RAMP_B, at)));
-    const bar = rect(inner.x, inner.center.y - 14, inner.w, 28);
+const GradientCtl = part<{ at: number }>()("w-gradient", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
+    const at = node.props.at, r = node.rect;
+    const bar = rect(r.x + 8, r.center.y - 14, r.w - 16, 28);
     const slices = 48;
     for (let i = 0; i < slices; i++)     // fake a gradient fill with thin slices
       paint.box(rect(bar.x + (bar.w * i) / slices, bar.y, bar.w / slices + 1, bar.h), 0, cmix(RAMP_A, RAMP_B, i / slices));
     const x = bar.x + bar.w * at;
-    paint.box(rect(x - 2, bar.y - 4, 4, bar.h + 8), 1, tokens.textBright);
-    thumb(paint, v(x, bar.bottom + 8), 5 + node.ch.hover, node.ch.hover);
+    paint.box(rect(x - 2, bar.y - 4, 4, bar.h + 8), 1, s.bright);
+    thumb(paint, v(x, bar.bottom + 8), 5 + node.ch.hover, s.glow, s.accent, s.thumb);
   },
-  on: [Drag1D({ axis: "x", pad: PAD_X, to: (_n, f) => ({ kind: "gradient", value: f }) })],
+  on: [Drag1D({ axis: "x", pad: 8, to: (_n, f) => ({ kind: "gradient", value: f }) })],
 });
 
 // ── 12. Toggle switch — Press + spring channel ────────────────────────────────
 
-const Toggle = part<Pos & { on: boolean }>("w-toggle", {
-  size: () => v(CARD_W, CARD_H),
-  channels: { on: { target: (n: GNode<Pos & { on: boolean }>) => (n.props.on ? 1 : 0), spring: { stiffness: 260, damping: 20 } } },
-  render(node, paint) {
-    const inner = card(paint, node, "Toggle", node.props.on ? "on" : "off");
+const ToggleCtl = part<{ on: boolean }>()("w-toggle", {
+  size: () => v(CW, CH),
+  channels: { on: { target: (n: GNode<{ on: boolean }>) => (n.props.on ? 1 : 0), spring: { stiffness: 260, damping: 20 } } },
+  style: (t, ch) => ({ ...ctrl(t, ch), track: t.mix(t.muted, t.accent, clamp(ch.on || 0, 0, 1)) }),
+  render: (node, paint, s) => {
+    const r = node.rect;
     const t = clamp(node.ch.on, 0, 1);
-    const sw = rect(inner.center.x - 26, inner.center.y - 13, 52, 26);
-    paint.box(sw, 13, tokens.mix(tokens.muted, tokens.accent, t));
-    paint.glow(tokens.accent, 8 * node.ch.hover, () => paint.dot(v(sw.x + 13 + t * 26, sw.center.y), 9, tokens.textBright));
+    const sw = rect(r.center.x - 26, r.center.y - 13, 52, 26);
+    paint.box(sw, 13, s.track);
+    paint.glow(s.accent, 8 * node.ch.hover, () => paint.dot(v(sw.x + 13 + t * 26, sw.center.y), 9, s.bright));
   },
   on: [Press(() => ({ kind: "toggle" }))],
 });
 
 // ── 13. Checkbox — Press + spring channel ─────────────────────────────────────
 
-const Checkbox = part<Pos & { on: boolean }>("w-check", {
-  size: () => v(CARD_W, CARD_H),
-  channels: { on: { target: (n: GNode<Pos & { on: boolean }>) => (n.props.on ? 1 : 0), spring: { stiffness: 340, damping: 22 } } },
-  render(node, paint) {
-    const inner = card(paint, node, "Checkbox", node.props.on ? "✓" : "—");
+const CheckboxCtl = part<{ on: boolean }>()("w-check", {
+  size: () => v(CW, CH),
+  channels: { on: { target: (n: GNode<{ on: boolean }>) => (n.props.on ? 1 : 0), spring: { stiffness: 340, damping: 22 } } },
+  style: (t, ch) => {
+    const on = clamp(ch.on || 0, 0, 1);
+    return { ...ctrl(t, ch), fill: t.mix(t.surface, t.accent, on * 0.9), edge: t.mix(t.muted, t.accent, Math.max(on, ch.hover || 0)) };
+  },
+  render: (node, paint, s) => {
+    const r = node.rect;
     const t = clamp(node.ch.on, 0, 1);
-    const bx = rect(inner.center.x - 15, inner.center.y - 15, 30, 30);
-    paint.box(bx, 7, tokens.mix(tokens.surface, tokens.accent, t * 0.9), tokens.mix(tokens.muted, tokens.accent, Math.max(t, node.ch.hover)), 1.5);
+    const bx = rect(r.center.x - 15, r.center.y - 15, 30, 30);
+    paint.box(bx, 7, s.fill, s.edge, 1.5);
     if (t > 0.02) {
       const c = bx.center, k = Math.min(1.1, t);
-      paint.line(v(c.x - 6 * k, c.y), v(c.x - 1.5 * k, c.y + 5 * k), tokens.textBright, 2.5);
-      paint.line(v(c.x - 1.5 * k, c.y + 5 * k), v(c.x + 7 * k, c.y - 5.5 * k), tokens.textBright, 2.5);
+      paint.line(v(c.x - 6 * k, c.y), v(c.x - 1.5 * k, c.y + 5 * k), s.bright, 2.5);
+      paint.line(v(c.x - 1.5 * k, c.y + 5 * k), v(c.x + 7 * k, c.y - 5.5 * k), s.bright, 2.5);
     }
   },
   on: [Press(() => ({ kind: "check" }))],
@@ -495,24 +494,25 @@ const Checkbox = part<Pos & { on: boolean }>("w-check", {
 
 const SEGMENTS = ["Move", "Rotate", "Scale"];
 
-const Segmented = part<Pos & { index: number }>("w-segment", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
-    const inner = card(paint, node, "Mode", SEGMENTS[node.props.index]);
-    const bar = rect(inner.x, inner.center.y - 15, inner.w, 30);
-    paint.box(bar, 8, calpha(tokens.bg, 0.5), tokens.muted, 1);
+const SegmentedCtl = part<{ index: number }>()("w-segment", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
+    const r = node.rect;
+    const bar = rect(r.x, r.center.y - 15, r.w, 30);
+    paint.box(bar, 8, s.well, s.muted, 1);
     const cellW = bar.w / SEGMENTS.length;
     const active = rect(bar.x + cellW * node.props.index + 2, bar.y + 2, cellW - 4, bar.h - 4);
-    paint.box(active, 6, calpha(tokens.accent, 0.8));
+    paint.box(active, 6, calpha(s.accent, 0.8));
     SEGMENTS.forEach((label, i) =>
       paint.label(label, v(bar.x + cellW * (i + 0.5), bar.center.y),
-        i === node.props.index ? tokens.textBright : tokens.textDim, { size: 11, weight: 600 }));
+        i === node.props.index ? s.bright : s.dim, { size: 11, weight: 600 }));
   },
   on: [
     Press((node) => {
-      const inner = innerOf(node.rect);
-      const px = (node.pointer ?? node.rect.center).x;
-      const i = clamp(Math.floor(((px - inner.x) / inner.w) * SEGMENTS.length), 0, SEGMENTS.length - 1);
+      const r = node.rect;
+      const px = (node.pointer ?? r.center).x;
+      const i = clamp(Math.floor(((px - r.x) / r.w) * SEGMENTS.length), 0, SEGMENTS.length - 1);
       return { kind: "segment", value: i };
     }),
   ],
@@ -523,26 +523,26 @@ const Segmented = part<Pos & { index: number }>("w-segment", {
 const AXES: ("x" | "y" | "z")[] = ["x", "y", "z"];
 const AXIS_HUE = { x: 0, y: 130, z: 215 };
 
-const Vector3 = part<Pos & { x: number; y: number; z: number }>("w-vec3", {
-  size: () => v(CARD_W, CARD_H),
-  render(node, paint) {
-    const p = node.props;
-    const inner = card(paint, node, "Vector 3", `${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}`);
-    const rowH = inner.h / 3;
+const Vector3Ctl = part<{ x: number; y: number; z: number }>()("w-vec3", {
+  size: () => v(CW, CH),
+  style: (t, ch) => ctrl(t, ch),
+  render: (node, paint, s) => {
+    const p = node.props, r = node.rect;
+    const rowH = r.h / 3;
     AXES.forEach((axis, i) => {
-      const y = inner.y + rowH * (i + 0.5);
-      const barX = inner.x + 22, barW = inner.w - 30;
-      paint.label(axis.toUpperCase(), v(inner.x + 4, y), hsl(AXIS_HUE[axis], 0.6, 0.6), { size: 11, weight: 700, align: "left" });
-      paint.box(rect(barX, y - 2, barW, 4), 2, tokens.muted);
+      const y = r.y + rowH * (i + 0.5);
+      const barX = r.x + 22, barW = r.w - 30;
+      paint.label(axis.toUpperCase(), v(r.x + 4, y), hsl(AXIS_HUE[axis], 0.6, 0.6), { size: 11, weight: 700, align: "left" });
+      paint.box(rect(barX, y - 2, barW, 4), 2, s.muted);
       const t = (p[axis] + 1) / 2;                                    // -1..1 → 0..1
       paint.dot(v(barX + barW * clamp(t, 0, 1), y), 5, hsl(AXIS_HUE[axis], 0.6, 0.6));
     });
   },
   on: [
-    Gesture<Pos & { x: number; y: number; z: number }, { axis: "x" | "y" | "z"; start: number; startX: number }>({
+    Gesture<{ x: number; y: number; z: number }, { axis: "x" | "y" | "z"; start: number; startX: number }>({
       begin(node, pointer) {
-        const inner = innerOf(node.rect);
-        const row = clamp(Math.floor((pointer.y - inner.y) / (inner.h / 3)), 0, 2);
+        const r = node.rect;
+        const row = clamp(Math.floor((pointer.y - r.y) / (r.h / 3)), 0, 2);
         const axis = AXES[row];
         return { axis, start: node.props[axis], startX: pointer.x };
       },
@@ -555,45 +555,55 @@ const Vector3 = part<Pos & { x: number; y: number; z: number }>("w-vec3", {
 });
 
 // ── The board (pannable surface) ──────────────────────────────────────────────
+// The board still draws free canvas chrome (grid, hint) — it defines no part
+// content of its own beyond the Pan surface. It reads tokens directly, and is
+// ALLOWED to: the check rule targets part-defining files' style/render leaks,
+// and this file's parts are all token-free. (The grid is app-level free drawing.)
 
-const Board = part<Record<string, never>>("widget-board", {
+const Board = part<Record<string, never>>()("widget-board", {
   size: () => v(0, 0),
   hit: () => true,
-  render(node, paint) {
+  style: (t) => ({ dot: calpha(t.muted, 0.35), hint: calpha(t.textDim, 0.9) }),
+  render: (node, paint, s) => {
     const vp = node.view!;
     const G = 32;
     const x0 = Math.floor(-vp.pan.x / vp.zoom / G) * G, x1 = (vp.w - vp.pan.x) / vp.zoom;
     const y0 = Math.floor(-vp.pan.y / vp.zoom / G) * G, y1 = (vp.h - vp.pan.y) / vp.zoom;
     for (let x = x0; x <= x1; x += G)
-      for (let y = y0; y <= y1; y += G) paint.dot(v(x, y), 1, calpha(tokens.muted, 0.35));
+      for (let y = y0; y <= y1; y += G) paint.dot(v(x, y), 1, s.dot);
     paint.label("drag the controls · drag empty space to pan · wheel to zoom",
-      v(120, 22), calpha(tokens.textDim, 0.9), { align: "left", size: 12 });
+      v(120, 22), s.hint, { align: "left", size: 12 });
   },
   on: [Pan()],
 });
 
-// ── View: lay the widgets out in a grid ───────────────────────────────────────
+// ── View: each control wrapped in a Card composite, laid out in a grid ─────────
 
+const CARD_W = 212, CARD_H = 150;
 const COLS = 3;
 const at = (i: number): Vec => v(24 + (i % COLS) * (CARD_W + 16), 44 + Math.floor(i / COLS) * (CARD_H + 16));
 
+/** A card wrapping one control part, positioned on the board. */
+const cell = (i: number, title: string, value: string, ctl: Element): Element =>
+  ({ ...Card(title.toLowerCase().replace(/\s+/g, "-"), { title, value }, [ctl]), pos: at(i) });
+
 function view(doc: Doc): Element {
   const cards: Element[] = [
-    Slider("slider", { pos: at(0), value: doc.scalar }),
-    Range("range", { pos: at(1), min: doc.range.min, max: doc.range.max }),
-    NumberScrub("scrub", { pos: at(2), value: doc.scrub }),
-    Knob("knob", { pos: at(3), value: doc.knob }),
-    AngleDial("angle", { pos: at(4), angle: doc.angle }),
-    AngleRange("arc", { pos: at(5), start: doc.arc.start, end: doc.arc.end }),
-    XYPad("xy", { pos: at(6), x: doc.xy.x, y: doc.xy.y }),
-    Box2D("box2d", { pos: at(7), ...doc.box }),
-    Box3D("box3d", { pos: at(8), yaw: doc.cube.yaw, pitch: doc.cube.pitch }),
-    ColorWheel("color", { pos: at(9), hue: doc.color.hue, sat: doc.color.sat }),
-    Gradient("gradient", { pos: at(10), at: doc.gradient }),
-    Toggle("toggle", { pos: at(11), on: doc.toggle }),
-    Checkbox("check", { pos: at(12), on: doc.check }),
-    Segmented("segment", { pos: at(13), index: doc.segment }),
-    Vector3("vec3", { pos: at(14), x: doc.vec3.x, y: doc.vec3.y, z: doc.vec3.z }),
+    cell(0, "Slider", doc.scalar.toFixed(2), SliderCtl("c", { value: doc.scalar })),
+    cell(1, "Range", `${doc.range.min.toFixed(2)}–${doc.range.max.toFixed(2)}`, RangeCtl("c", { min: doc.range.min, max: doc.range.max })),
+    cell(2, "Number", doc.scrub.toFixed(1), NumberScrubCtl("c", { value: doc.scrub })),
+    cell(3, "Knob", `${Math.round(doc.knob * 100)}%`, KnobCtl("c", { value: doc.knob })),
+    cell(4, "Angle", `${Math.round(doc.angle)}°`, AngleDialCtl("c", { angle: doc.angle })),
+    cell(5, "Arc", `${Math.round(doc.arc.start)}°–${Math.round(doc.arc.end)}°`, AngleRangeCtl("c", { start: doc.arc.start, end: doc.arc.end })),
+    cell(6, "Vector 2", `${doc.xy.x.toFixed(2)}, ${doc.xy.y.toFixed(2)}`, XYPadCtl("c", { x: doc.xy.x, y: doc.xy.y })),
+    cell(7, "Bounds 2D", `${doc.box.minX.toFixed(1)},${doc.box.minY.toFixed(1)}→${doc.box.maxX.toFixed(1)},${doc.box.maxY.toFixed(1)}`, Box2DCtl("c", { ...doc.box })),
+    cell(8, "Box 3D", `${Math.round(degOf(doc.cube.yaw))}°`, Box3DCtl("c", { yaw: doc.cube.yaw, pitch: doc.cube.pitch })),
+    cell(9, "Color", hexOf(hsl(doc.color.hue * 360, doc.color.sat, 0.55)), ColorWheelCtl("c", { hue: doc.color.hue, sat: doc.color.sat })),
+    cell(10, "Gradient", hexOf(cmix(RAMP_A, RAMP_B, doc.gradient)), GradientCtl("c", { at: doc.gradient })),
+    cell(11, "Toggle", doc.toggle ? "on" : "off", ToggleCtl("c", { on: doc.toggle })),
+    cell(12, "Checkbox", doc.check ? "✓" : "—", CheckboxCtl("c", { on: doc.check })),
+    cell(13, "Mode", SEGMENTS[doc.segment], SegmentedCtl("c", { index: doc.segment })),
+    cell(14, "Vector 3", `${doc.vec3.x.toFixed(1)},${doc.vec3.y.toFixed(1)},${doc.vec3.z.toFixed(1)}`, Vector3Ctl("c", { x: doc.vec3.x, y: doc.vec3.y, z: doc.vec3.z })),
   ];
   return Board("root", {}, [Free("cards", {}, cards)]);
 }
@@ -624,4 +634,7 @@ mount(canvas, {
   view,
 });
 
-attachSourcePanel([{ name: "main.ts", code: mainSource }]);
+attachSourcePanel([
+  { name: "main.ts", code: mainSource },
+  { name: "widgets.ts (shared)", code: widgetsSource },
+]);

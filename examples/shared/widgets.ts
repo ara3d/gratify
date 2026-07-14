@@ -3,7 +3,7 @@
 // (or a future widget library) ship widgets.
 
 import {
-  calpha, Drag1D, GNode, Intentish, part, Press, rect, surface, v,
+  calpha, Drag1D, Element, GNode, Intentish, Label, part, Press, rect, Row, Stack, surface, v,
 } from "gratify";
 
 // ---- Button -----------------------------------------------------------------
@@ -129,3 +129,35 @@ export const CloseButton = part<IconButtonProps>()("close-button", {
   },
   on: [Press((node) => node.props.press)],
 });
+
+// ---- Card (a composite: a part MADE OF parts) --------------------------------
+// `body` supplies the chrome — a titled Stack — and drops the use-site children
+// into a content slot. `render` paints the card background UNDER that content
+// (drawPass renders a part before its children). One definition; every card in
+// the app is now themable and restylable through this single seam.
+export interface CardProps { title: string; value?: string; }
+
+export const Card = part<CardProps>()("card", {
+  style: (t, ch) => ({
+    fill: t.mix(t.surface, t.surfaceHi, 0.35 + 0.4 * ch.hover),
+    edge: t.mix(t.muted, t.accent, 0.2 + 0.5 * ch.hover),
+    corner: 10,
+  }),
+  render: (node, p, s) => p.box(node.rect, s.corner, s.fill, s.edge, 1),
+  body: (props, children): Element[] => [
+    Stack("layout", { pad: 14, gap: 10, align: "stretch" }, [
+      Row("head", { gap: 8, justify: "between" }, [
+        Label("title", { text: props.title, weight: 600, size: 12 }),
+        ...(props.value ? [Label("value", { text: props.value, dim: true, size: 11 })] : []),
+      ]),
+      ...children,
+    ]),
+  ],
+});
+
+// ---- Labeled (the rung-1 alternative: a plain function, no framework) --------
+// When you only need a private arrangement, a function suffices — no named part,
+// no theme seam. Reach for `Card` (a part) when you want the arrangement to be
+// named, themable, and reachable by `extendTheme("dark", "card", …)`.
+export const Labeled = (key: string, text: string, el: Element): Element =>
+  Row(key, { gap: 8, align: "center" }, [Label(`${key}/l`, { text, dim: true, size: 11 }), el]);

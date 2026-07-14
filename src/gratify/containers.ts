@@ -10,7 +10,7 @@ import { part } from "./part";
 export interface StackProps {
   gap?: number;
   pad?: number;
-  align?: "start" | "center" | "end";      // cross-axis
+  align?: "start" | "center" | "end" | "stretch";   // cross-axis ("stretch": fill width)
   /** Main-axis distribution (Row only): "start" packs at the front (default),
    *  "between" pushes the first/last children to the edges, gaps spread. */
   justify?: "start" | "between";
@@ -33,7 +33,8 @@ export const Stack = part<StackProps>("stack", {
     const inner = r.w - 2 * pad;
     let y = r.y + pad;
     return kids.map(({ size: s }) => {
-      const out = new Rect(r.x + pad + alignOff(props.align, inner, s.x), y, s.x, s.y);
+      const w = props.align === "stretch" ? inner : s.x;
+      const out = new Rect(r.x + pad + alignOff(props.align, inner, s.x), y, w, s.y);
       y += s.y + gap;
       return out;
     });
