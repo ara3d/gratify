@@ -23,6 +23,7 @@ export * from "./theme";
 export * from "./part";
 export * from "./scene";
 export * from "./interact";
+export * from "./style";
 export * from "./containers";
 export * from "./label";
 export * from "./extend";

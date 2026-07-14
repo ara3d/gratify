@@ -24,16 +24,16 @@ function update(doc: Doc, intent: Intent): Doc {
 
 // 2. A widget ("part") — size, style, render, and behavior in one definition.
 //    The style/render split is deliberate: `style` decides what things look
-//    like, `render` just paints the result.
+//    like, `render` just paints the result. State the props type once via the
+//    curried `part<Props>()`; the style record is inferred — no named interface.
 type ButtonProps = { label: string; press: Intent };
-type ButtonStyle = { fill: Color; lift: number; text: Color };
 
-const Button = part<ButtonProps, ButtonStyle>("button", {
+const Button = part<ButtonProps>()("button", {
   size: (props, measure) => v(measure.text(props.label).x + 28, 34),
 
   // `channels.hover` and `channels.press` ease between 0 and 1 as the pointer
   // interacts, so anything you compute from them animates for free.
-  style: (tokens: Tokens, channels: Channels): ButtonStyle => ({
+  style: (tokens, channels) => ({
     fill: tokens.mix(tokens.surface, tokens.accent, 0.2 + 0.3 * channels.hover + 0.4 * channels.press),
     lift: 2 * channels.hover - 2 * channels.press,
     text: tokens.text,

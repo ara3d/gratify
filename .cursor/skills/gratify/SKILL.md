@@ -37,6 +37,8 @@ style(tokens, ch, props) --> S  --render-->  pixels
 7. Render reads `node.rect` + resolved style only. Logic stay out of paint.
 8. Prefer pure `update`. Mutate Doc break `withUndo`.
 9. Text input, modal popups (dropdowns), instance-local state — **not built yet**. Don't invent APIs for them; skip or stub outside framework. (Adornments ARE built — see below.)
+10. State props type once via curried `part<Props>()("name", spec)`; never name a style interface — `S` is inferred from `style`'s return. Legacy `part<P,S>(...)` still compiles but the curried form types interactor callbacks (single-call form degrades them to `unknown`).
+11. If `render` wants a token, the value belongs in `style`. Parts never import `tokens` (checked by `npm run check`); the style function receives it. Spread a recipe from `style.ts` (`surface`, `textTone`) then add your own fields. Cross-widget restyle assumes `SurfaceStyle` = `{ fill, edge, text }`.
 
 ## App skeleton
 

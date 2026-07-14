@@ -3,10 +3,13 @@
 // (or a future widget library) ship widgets.
 
 import {
-  calpha, Color, Drag1D, GNode, Intentish, part, Press, rect, v,
+  calpha, Drag1D, GNode, Intentish, part, Press, rect, surface, v,
 } from "gratify";
 
 // ---- Button -----------------------------------------------------------------
+// The style record is INFERRED from `style`'s return value — no named interface,
+// no second type parameter. `surface(...)` supplies the house { fill, edge, text }
+// hover/press blends; the widget adds only its own fields (corner, lift).
 export interface ButtonProps {
   label: string;
   press: Intentish;
@@ -14,22 +17,14 @@ export interface ButtonProps {
   danger?: boolean;
 }
 
-interface ButtonStyle { fill: Color; edge: Color; corner: number; lift: number; text: Color; }
-
-export const Button = part<ButtonProps, ButtonStyle>("button", {
+export const Button = part<ButtonProps>()("button", {
   size: (props, m) => v(m.text(props.label).x + 28, 32),
-  style(t, ch, props): ButtonStyle {
-    const base = props.danger ? t.danger : props.accent ? t.accent : t.surfaceHi;
-    const emphasis = 0.18 + 0.32 * ch.hover + 0.4 * ch.press;
-    return {
-      fill: t.mix(t.surface, base, props.accent || props.danger ? 0.25 + emphasis : emphasis * 0.8),
-      edge: t.mix(t.muted, base, ch.hover),
-      corner: 8,
-      lift: 2 * ch.hover - 2 * ch.press,
-      text: t.mix(t.text, t.textBright, ch.hover),
-    };
-  },
-  render(node, p, s) {
+  style: (t, ch, props) => ({
+    ...surface(t, ch, { tint: props.danger ? t.danger : props.accent ? t.accent : undefined }),
+    corner: 8,
+    lift: 2 * ch.hover - 2 * ch.press,
+  }),
+  render: (node, p, s) => {
     const r = node.rect.raise(s.lift);
     p.box(r, s.corner, s.fill, s.edge, 1);
     p.label(node.props.label, r.center, s.text, { weight: 500 });
@@ -40,21 +35,17 @@ export const Button = part<ButtonProps, ButtonStyle>("button", {
 // ---- Checkbox -----------------------------------------------------------------
 export interface CheckboxProps { on: boolean; toggle: Intentish; }
 
-interface CheckboxStyle { fill: Color; edge: Color; mark: Color; pop: number; }
-
-export const Checkbox = part<CheckboxProps, CheckboxStyle>("checkbox", {
+export const Checkbox = part<CheckboxProps>()("checkbox", {
   size: () => v(20, 20),
   channels: {
     on: { target: (n: GNode<CheckboxProps>) => (n.props.on ? 1 : 0), spring: { stiffness: 340, damping: 22 } },
   },
-  style(t, ch): CheckboxStyle {
-    return {
-      fill: t.mix(t.surface, t.accent, Math.min(1, Math.max(0, ch.on)) * 0.9),
-      edge: t.mix(t.muted, t.accent, Math.max(ch.on, ch.hover * 0.6)),
-      mark: calpha(t.textBright, Math.min(1, Math.max(0, ch.on))),
-      pop: ch.on,
-    };
-  },
+  style: (t, ch) => ({
+    fill: t.mix(t.surface, t.accent, Math.min(1, Math.max(0, ch.on)) * 0.9),
+    edge: t.mix(t.muted, t.accent, Math.max(ch.on, ch.hover * 0.6)),
+    mark: calpha(t.textBright, Math.min(1, Math.max(0, ch.on))),
+    pop: ch.on,
+  }),
   render(node, p, s) {
     const r = node.rect.inset(1);
     p.box(r, 6, s.fill, s.edge, 1.5);
@@ -70,21 +61,17 @@ export const Checkbox = part<CheckboxProps, CheckboxStyle>("checkbox", {
 // ---- Toggle switch ------------------------------------------------------------
 export interface ToggleProps { on: boolean; flip: Intentish; }
 
-interface ToggleStyle { track: Color; knob: Color; travel: number; glow: number; }
-
-export const Toggle = part<ToggleProps, ToggleStyle>("toggle", {
+export const Toggle = part<ToggleProps>()("toggle", {
   size: () => v(42, 24),
   channels: {
     on: { target: (n: GNode<ToggleProps>) => (n.props.on ? 1 : 0), spring: { stiffness: 260, damping: 20 } },
   },
-  style(t, ch): ToggleStyle {
-    return {
-      track: t.mix(t.muted, t.accent, Math.min(1, Math.max(0, ch.on))),
-      knob: t.textBright,
-      travel: ch.on,                    // a spring, so the knob *thunks*
-      glow: 8 * ch.hover,
-    };
-  },
+  style: (t, ch) => ({
+    track: t.mix(t.muted, t.accent, Math.min(1, Math.max(0, ch.on))),
+    knob: t.textBright,
+    travel: ch.on,                    // a spring, so the knob *thunks*
+    glow: 8 * ch.hover,
+  }),
   render(node, p, s) {
     const r = node.rect;
     p.box(r, r.h / 2, s.track);
@@ -101,22 +88,18 @@ export interface SliderProps {
   width?: number;
 }
 
-interface SliderStyle { track: Color; fill: Color; knob: Color; knobR: number; glow: number; }
-
-export const Slider = part<SliderProps, SliderStyle>("slider", {
+export const Slider = part<SliderProps>()("slider", {
   size: (props) => v(props.width ?? 170, 30),
   channels: {
     shown: { target: (n: GNode<SliderProps>) => n.props.value, spring: { stiffness: 300, damping: 24 } },
   },
-  style(t, ch): SliderStyle {
-    return {
-      track: t.muted,
-      fill: t.accent,
-      knob: t.mix(t.textBright, t.accent, ch.hover * 0.3),
-      knobR: 6.5 + 2 * ch.hover + 1 * ch.press,
-      glow: 10 * ch.hover,
-    };
-  },
+  style: (t, ch) => ({
+    track: t.muted,
+    fill: t.accent,
+    knob: t.mix(t.textBright, t.accent, ch.hover * 0.3),
+    knobR: 6.5 + 2 * ch.hover + 1 * ch.press,
+    glow: 10 * ch.hover,
+  }),
   render(node, p, s) {
     const r = node.rect;
     const x = r.x + 8, w = r.w - 16, y = r.center.y;
@@ -131,17 +114,13 @@ export const Slider = part<SliderProps, SliderStyle>("slider", {
 // ---- Icon button (×) ---------------------------------------------------------
 export interface IconButtonProps { press: Intentish; }
 
-interface CloseStyle { fill: Color; x: Color; spin: number; }
-
-export const CloseButton = part<IconButtonProps, CloseStyle>("close-button", {
+export const CloseButton = part<IconButtonProps>()("close-button", {
   size: () => v(20, 20),
-  style(t, ch): CloseStyle {
-    return {
-      fill: calpha(t.danger, 0.12 + 0.5 * ch.hover),
-      x: t.mix(t.textDim, t.danger, ch.hover),
-      spin: ch.press,
-    };
-  },
+  style: (t, ch) => ({
+    fill: calpha(t.danger, 0.12 + 0.5 * ch.hover),
+    x: t.mix(t.textDim, t.danger, ch.hover),
+    spin: ch.press,
+  }),
   render(node, p, s) {
     const r = node.rect.inset(1), c = r.center, k = 3.6 * (1 - 0.3 * s.spin);
     p.box(r, 6, s.fill);
