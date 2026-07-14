@@ -17,9 +17,10 @@ import { CanvasPainter, NullPainter, Painter } from "./painter";
 import { Element, Instance, Layer, reconcile } from "./scene";
 import { GNode } from "./part";
 import { Anchor, axisFraction, GestureSpec, Interactor, Query } from "./interact";
-import { tickTheme } from "./theme";
+import { themeVersion, tickTheme } from "./theme";
 import { Fx } from "./fx";
-import { AnyDef, EffCache } from "./effective";
+import { EffCache } from "./effective";
+import { AnyDef, expandBodies } from "./compose";
 import { layoutScene } from "./layout";
 import { animateScene } from "./animate";
 import { renderScene } from "./draw";
@@ -78,6 +79,7 @@ export class Runtime<TDoc, TIntent> {
 
   private effs = new EffCache();
   private dirty = false;
+  private themeVer = themeVersion;   // re-expand+reconcile when a theme-scope mapBody changes structure
   private dpr = 1;
   private viewW: number; private viewH: number;
   private pointer: Vec | null = null;          // screen coords
@@ -97,7 +99,7 @@ export class Runtime<TDoc, TIntent> {
     this.viewW = opts.width ?? 800; this.viewH = opts.height ?? 600;
     this.painter = canvas && !opts.headless ? new CanvasPainter(canvas) : new NullPainter();
     this.doc = app.init;
-    this.root = reconcile(null, app.view(this.doc));
+    this.root = reconcile(null, expandBodies(app.view(this.doc)));
     if (canvas && !opts.headless) this.attach(canvas);
   }
 
@@ -252,7 +254,10 @@ export class Runtime<TDoc, TIntent> {
   tick(dt: number) {
     this.time += dt;
     const themeFading = tickTheme(dt);
-    if (this.dirty) { this.root = reconcile(this.root, this.app.view(this.doc)); this.dirty = false; }
+    // a themeVersion bump (setTheme / extendTheme) may change composite structure
+    // via a theme-scope mapBody, so treat it like a dirty view.
+    if (themeVersion !== this.themeVer) { this.themeVer = themeVersion; this.dirty = true; }
+    if (this.dirty) { this.root = reconcile(this.root, expandBodies(this.app.view(this.doc))); this.dirty = false; }
     const eff = (i: Instance) => this.effs.get(i);
     layoutScene(this.root, dt, eff, this.painter.measure, this.viewW, this.viewH);
     this.publishAnchors();
@@ -309,7 +314,7 @@ export class Runtime<TDoc, TIntent> {
     const els = this.gesture?.spec.view?.(this.gesture.state, this.query) ?? [];
     if (els.length || this.gestureRoot?.children.length || this.gestureRoot?.ghosts.length) {
       const rootEl: Element = { key: "__gestures", part: GESTURE_ROOT, props: {}, children: els, layer: "overlay" };
-      this.gestureRoot = reconcile(this.gestureRoot, rootEl);
+      this.gestureRoot = reconcile(this.gestureRoot, expandBodies(rootEl));
       layoutScene(this.gestureRoot, dt, eff, this.painter.measure, this.viewW, this.viewH);
     } else {
       this.gestureRoot = null;
@@ -331,7 +336,7 @@ export class Runtime<TDoc, TIntent> {
 
     if (kids.length || this.adornRoot?.children.length || this.adornRoot?.ghosts.length) {
       const rootEl: Element = { key: "__adorn", part: ADORN_ROOT, props: {}, children: kids, layer: "overlay" };
-      this.adornRoot = reconcile(this.adornRoot, rootEl);
+      this.adornRoot = reconcile(this.adornRoot, expandBodies(rootEl));
       layoutScene(this.adornRoot, dt, eff, this.painter.measure, this.viewW, this.viewH);
     } else {
       this.adornRoot = null;

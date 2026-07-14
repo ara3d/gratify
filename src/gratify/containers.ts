@@ -11,6 +11,9 @@ export interface StackProps {
   gap?: number;
   pad?: number;
   align?: "start" | "center" | "end";      // cross-axis
+  /** Main-axis distribution (Row only): "start" packs at the front (default),
+   *  "between" pushes the first/last children to the edges, gaps spread. */
+  justify?: "start" | "between";
   states?: Record<string, boolean>;
 }
 
@@ -48,11 +51,17 @@ export const Row = part<StackProps>("row", {
   place(props, r, kids): Rect[] {
     const gap = props.gap ?? 8, pad = props.pad ?? 0;
     const inner = r.h - 2 * pad;
+    // "between" spreads any slack (rect wider than content) across the gaps.
+    let extra = 0;
+    if (props.justify === "between" && kids.length > 1) {
+      const content = kids.reduce((a, k) => a + k.size.x, 0) + gap * (kids.length - 1);
+      extra = Math.max(0, (r.w - 2 * pad) - content) / (kids.length - 1);
+    }
     let x = r.x + pad;
     return kids.map(({ size: s }) => {
       const align = props.align ?? "center";
       const out = new Rect(x, r.y + pad + alignOff(align, inner, s.y), s.x, s.y);
-      x += s.x + gap;
+      x += s.x + gap + extra;
       return out;
     });
   },

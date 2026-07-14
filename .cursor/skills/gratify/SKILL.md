@@ -69,7 +69,8 @@ Undo: wrap whole app — `mount(canvas, withUndo({ init, update, view }))`. Emit
 | `size` / `measure`+`place` | leaf size / container layout |
 | `channels` | extra chase specs (`target`+`rate`\|`spring`, or `decay` impulse) |
 | `style(t, ch, props)` | → flat style record `S` |
-| `render(node, paint, S)` | draw |
+| `render(node, paint, S)` | draw (chrome under content for composites) |
+| `body(props, children)` | composite: derive child elements (parts made of parts); state-clock, pure `props→elements`, `children` = content slot |
 | `on` | interactor list |
 | `anchors` | named world points for wires |
 | `hit` | custom hit (wires = curve distance) |
@@ -101,6 +102,7 @@ Same `PartExt` three scopes — order: definition → theme → use site (closes
 mapStyle((t, ch, props, base) => ({ ...base, fill: ... }))
 mapRender((node, p, style, base) => { base(); /* overlay */ })
 mapSize((props, m, base) => ({ x: base.x, y: Math.max(base.y, 44) }))
+mapBody((props, children, base) => [...base, Badge("b", {})])  // wrap structure; body-less part → base = use-site children
 
 // append list facet
 addChannels({ "fx/x": { target: (n) => n.ch.hover, rate: 6 } })

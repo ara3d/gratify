@@ -59,6 +59,20 @@ export const mapSize = (
       f(props, m, def.size ? def.size(props, m) : v(0, 0)),
   });
 
+/** Wrap the structure: receive the base body's output (for a body-less part,
+ *  its use-site children) and return the transformed list. Completes the
+ *  extension algebra's coverage — `mapBody` is to `body` what `mapStyle` is to
+ *  `style`. On a body-less part the base IS the use-site children, so
+ *  "append a badge child to any container" is a one-liner. */
+export const mapBody = (
+  f: (props: unknown, children: Element[], base: Element[]) => Element[],
+): PartExt =>
+  (def) => ({
+    ...def,
+    body: (props: unknown, children: Element[]) =>
+      f(props, children, def.body ? def.body(props, children) : children),
+  });
+
 // ---- appending list facets ----------------------------------------------------
 
 /** Append animated channels (namespace yours: "fx/sheen", not "sheen"). */

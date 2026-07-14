@@ -414,3 +414,82 @@ describe("adornments", () => {
     expect(rt.doc.removed).toBe(true);              // adornment dispatched the host intent
   });
 });
+
+// ---- body facet (composites: parts made of parts) ---------------------------
+import { mapBody } from "../src/gratify";
+
+describe("body facet", () => {
+  // A composite whose chrome is the part itself and whose body is a Stack of a
+  // Label plus the use-site children (the content slot).
+  const Card = part<{ title: string }>()("card", {
+    render() {},
+    body: (props, children) => [
+      Stack("layout", { gap: 4 }, [Label("title", { text: props.title }), ...children]),
+    ],
+  });
+
+  const mk = <D, I>(view: (d: D) => Element, init: D, update: (d: D, i: I) => D) =>
+    new Runtime<D, I>(null, { init, update, view }, { headless: true, width: 300, height: 200 });
+
+  it("expands a composite's body into real keyed instances at reconcile", () => {
+    const rt = mk<number, never>(
+      () => Card("c", { title: "Hi" }, [Box("body", { n: 1 })]),
+      0, (d) => d);
+    rt.step(3);
+    // card → stack("layout") → [label("title"), box("body")]
+    const layout = rt.root.children[0];
+    expect(layout.part.name).toBe("stack");
+    expect(layout.children.map((c) => c.part.name)).toEqual(["label", "box"]);
+  });
+
+  it("body children reconcile by key — channels survive re-expansion", () => {
+    const rt = mk<number, never>(
+      () => Card("c", { title: "Hi" }, [Box("body", { n: 1 })]),
+      0, (d) => d);
+    rt.step(3);
+    const box = rt.root.children[0].children[1];
+    box.ch.hover = 0.7;
+    rt.dispatch(undefined as never);   // force re-view/re-expand
+    rt.step(1);
+    // survived re-expansion (a fresh instance would start hover at 0 and stay near 0)
+    expect(rt.root.children[0].children[1].ch.hover).toBeGreaterThan(0.4);
+  });
+
+  it("mapBody at use-site injects a child onto a body-less container", () => {
+    // body-less Stack: base is the use-site children; append a badge.
+    const withBadge = mapBody((_p, _ch, base) => [...base, Box("badge", { n: 9 })]);
+    const rt = mk<number, never>(
+      () => Stack("root", {}, [withExt(Stack("s", {}, [Box("a", { n: 1 })]), withBadge)]),
+      0, (d) => d);
+    rt.step(3);
+    const inner = rt.root.children[0];
+    expect(inner.children.map((c) => c.key)).toEqual(["a", "badge"]);
+  });
+
+  it("mapBody at theme scope changes structure live on theme toggle", () => {
+    const addFooter = mapBody((_p, _ch, base) => [...base, Box("footer", { n: 0 })]);
+    extendTheme("dark", "card", addFooter as never);
+    const rt = mk<number, never>(
+      () => Card("c", { title: "Hi" }, []),
+      0, (d) => d);
+    rt.step(3);
+    // theme-scope mapBody wraps card.body → [stack, footer]
+    expect(rt.root.children.map((c) => c.key)).toEqual(["layout", "footer"]);
+    clearThemeExt("dark", "card");
+    rt.step(1);
+    expect(rt.root.children.map((c) => c.key)).toEqual(["layout"]);
+  });
+
+  it("removing a body child ghosts it (exit plays inside the composite)", () => {
+    interface D { show: boolean; }
+    const rt = mk<D, { kind: "hide" }>(
+      (d) => Card("c", { title: "Hi" }, d.show ? [Box("body", { n: 1 })] : []),
+      { show: true }, (d, i) => (i.kind === "hide" ? { show: false } : d));
+    rt.step(3);
+    expect(rt.root.children[0].children.length).toBe(2);
+    rt.dispatch({ kind: "hide" });
+    rt.step(1);
+    expect(rt.root.children[0].ghosts.length).toBe(1);
+    expect(rt.root.children[0].ghosts[0].key).toBe("body");
+  });
+});

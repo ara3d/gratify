@@ -75,6 +75,12 @@ export interface PartSpec<P, S = Record<string, unknown>> {
   style?(t: Tokens, ch: Channels, props: P): S;
   /** Draw, reading only rect + the resolved style. */
   render?(node: GNode<P>, p: Painter, style: S): void;
+  /** Composite: derive child elements from props (parts made of parts). Runs
+   *  at reconcile time (the state clock), never per frame — structure is a
+   *  function of state; motion stays in channels. `children` are the use-site
+   *  children: place them where the composite wants its content slot. A part
+   *  without `body` behaves exactly as before. Wrap with `mapBody`. */
+  body?(props: P, children: Element[]): Element[];
   /** Behavior: interactors, as values. They only emit intents. */
   on?: Interactor<P>[];
   /** Adornments: overlay elements anchored to this host (tooltips, badges,

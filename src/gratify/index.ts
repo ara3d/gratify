@@ -27,6 +27,7 @@ export * from "./style";
 export * from "./containers";
 export * from "./label";
 export * from "./extend";
+export * from "./compose";
 export * from "./fx";
 export * from "./particles";
 export * from "./effects";
