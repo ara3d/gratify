@@ -1,63 +1,140 @@
-// Example: todo — proves keyed enter/exit/reflow (README §1 claims).
-// You should see: "Add" pops a new row in; the checkbox check springs;
-// deleting a row fades it out while siblings glide up. Rows are keyed by id —
-// that one fact is the entire animation recipe.
+// ============================================================================
+// Example: todo — keyed enter / exit / reflow.
+//
+// What to look for when you run it:
+//   • "+ Add" pops a new row in (an automatic `enter` animation).
+//   • Deleting a row fades it out while the rows below GLIDE UP to fill the
+//     gap. Nobody wrote that animation: rows are keyed by a stable id, so the
+//     runtime keeps each row's springs alive across state changes, and layout
+//     changes simply give those springs new targets.
+//   • Checking a row off flips a `done` state tag. The tag automatically
+//     becomes an animated channel, so the label's dimming cross-fades.
+//
+// The one rule that buys all of this: KEY LIST ROWS BY A STABLE ID.
+// ============================================================================
 
 import { mount, Stack, Row, Label } from "gratify";
 import { Button, Checkbox, CloseButton } from "../shared/widgets";
 
-interface Todo { id: string; text: string; done: boolean; }
-interface Doc { todos: Todo[]; next: number; }
+import { attachSourcePanel } from "../shared/source-panel";
+import mainSource from "./main.ts?raw";
+import widgetsSource from "../shared/widgets.ts?raw";
 
-type Intent =
+// ── State ─────────────────────────────────────────────────────────────────────
+
+interface TodoItem {
+  id: string;        // stable identity — this is what reconcile matches on
+  text: string;
+  done: boolean;
+}
+
+interface TodoDocument {
+  todos: TodoItem[];
+  nextIdNumber: number;   // used to mint fresh ids
+}
+
+type TodoIntent =
   | { kind: "add" }
-  | { kind: "done"; id: string }
+  | { kind: "toggle-done"; id: string }
   | { kind: "remove"; id: string };
 
-const POOL = [
+// A little pool of task texts so "+ Add" has something to say.
+const TASK_TEXT_POOL = [
   "Feed the kea", "Write the layering guide", "Port the kernel",
   "Spring all the things", "Delete a monolith", "Ship an example",
   "Wrap, don't edit", "Chase the target", "Let siblings glide",
 ];
 
-function update(doc: Doc, intent: Intent): Doc {
+// ── Update: the single place state changes ────────────────────────────────────
+
+function update(document: TodoDocument, intent: TodoIntent): TodoDocument {
   switch (intent.kind) {
-    case "add":
-      return {
-        next: doc.next + 1,
-        todos: [...doc.todos, { id: `t${doc.next}`, text: POOL[doc.next % POOL.length], done: false }],
+
+    case "add": {
+      const newItem: TodoItem = {
+        id: `todo-${document.nextIdNumber}`,
+        text: TASK_TEXT_POOL[document.nextIdNumber % TASK_TEXT_POOL.length],
+        done: false,
       };
-    case "done":
-      return { ...doc, todos: doc.todos.map((t) => (t.id === intent.id ? { ...t, done: !t.done } : t)) };
+      return {
+        nextIdNumber: document.nextIdNumber + 1,
+        todos: [...document.todos, newItem],
+      };
+    }
+
+    case "toggle-done":
+      return {
+        ...document,
+        todos: document.todos.map((item) =>
+          item.id === intent.id ? { ...item, done: !item.done } : item),
+      };
+
     case "remove":
-      return { ...doc, todos: doc.todos.filter((t) => t.id !== intent.id) };
+      return {
+        ...document,
+        todos: document.todos.filter((item) => item.id !== intent.id),
+      };
   }
 }
 
-function view(doc: Doc) {
+// ── View: Doc → Element tree ──────────────────────────────────────────────────
+//
+// Note the `states: { done: item.done }` on each row: state tags are open-
+// ended labels projected FROM the model BY the view. Each one automatically
+// gets an animated channel, which the Label widget reads to dim itself.
+
+function view(document: TodoDocument) {
   return Stack("root", { gap: 10, pad: 48 }, [
+
     Label("title", { text: "Todos", size: 20, weight: 600, bright: true }),
-    ...doc.todos.map((t) =>
-      Row(t.id, { gap: 10, states: { done: t.done } }, [
-        Checkbox("check", { on: t.done, toggle: { kind: "done", id: t.id } }),
-        Label("text", { text: t.text, dim: t.done, states: { done: t.done } }),
-        CloseButton("x", { press: { kind: "remove", id: t.id } }),
+
+    // One Row per todo, keyed by the item's stable id.
+    ...document.todos.map((item) =>
+      Row(item.id, { gap: 10, states: { done: item.done } }, [
+
+        Checkbox("check", {
+          on: item.done,
+          toggle: { kind: "toggle-done", id: item.id },
+        }),
+
+        Label("text", {
+          text: item.text,
+          dim: item.done,
+          states: { done: item.done },
+        }),
+
+        CloseButton("delete", {
+          press: { kind: "remove", id: item.id },
+        }),
       ]),
     ),
-    Button("add", { label: "+ Add", press: { kind: "add" }, accent: true }),
+
+    Button("add-button", {
+      label: "+ Add",
+      press: { kind: "add" },
+      accent: true,
+    }),
   ]);
 }
 
+// ── Mount ─────────────────────────────────────────────────────────────────────
+
 const canvas = document.getElementById("c") as HTMLCanvasElement;
+
 mount(canvas, {
   init: {
     todos: [
-      { id: "t-a", text: "Try hovering things", done: false },
-      { id: "t-b", text: "Check one off", done: true },
-      { id: "t-c", text: "Delete one — watch the glide", done: false },
+      { id: "todo-a", text: "Try hovering things", done: false },
+      { id: "todo-b", text: "Check one off", done: true },
+      { id: "todo-c", text: "Delete one — watch the glide", done: false },
     ],
-    next: 0,
+    nextIdNumber: 0,
   },
   update,
   view,
 });
+
+attachSourcePanel([
+  { name: "main.ts", code: mainSource },
+  { name: "widgets.ts (shared)", code: widgetsSource },
+]);

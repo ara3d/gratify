@@ -1,93 +1,179 @@
-// Example: extensions — proves "wrap, don't edit" (README §3) at all three
-// scopes. `outlined`, `sheen`, and `chunky` below are ordinary functions
-// PartDef → PartDef. The stock Button never planned for any of them.
+// ============================================================================
+// Example: extensions — "wrap, don't edit", at all three scopes.
 //
-//   scope 1 (definition): FancyButton = derivePart("fancy", Button, sheen)
-//   scope 2 (theme):      the "Neon rows" switch calls extendTheme("dark",
-//                         "button", …) — EVERY button restyles, including
-//                         FancyButton (ancestry rule), with zero call-site edits
-//   scope 3 (use site):   one button gets `outlined` via withExt — only it
-//                         changes
+// An extension is an ordinary function from part definition to part
+// definition. Function facets (size / style / render) extend by WRAPPING —
+// your function receives the base result and states only its delta. List
+// facets (channels / interactors) extend by APPENDING.
+//
+// The same extension value can be applied at three scopes:
+//
+//   scope 1 — DEFINITION: bake it into a new named part.
+//             FancyButton = derivePart("fancy-button", Button, sheen)
+//
+//   scope 2 — THEME: apply it to every matching part in the app while a
+//             theme is active — including parts inside code you don't own.
+//             The "Neon all buttons" switch below does this live, and it
+//             reaches FancyButton too (derived parts remember their ancestry).
+//
+//   scope 3 — USE SITE: apply it to one element only, with withExt(...).
+//
+// The stock Button never planned for any of this.
+// ============================================================================
 
 import {
-  addChannels, calpha, Channels, Color, derivePart, extendTheme, clearThemeExt,
-  GNode, mapRender, mapSize, mapStyle, mount, PartExt, rect, Stack, Row, Label,
-  Tokens, withExt,
+  addChannels,        // append animated channels to a part
+  calpha, Channels, Color,
+  derivePart,         // scope 1: bake extensions into a new named part
+  extendTheme,        // scope 2: extend a part app-wide while a theme is active
+  clearThemeExt,      //          …and remove that again
+  GNode,
+  mapRender,          // wrap the render facet (paint under/over the base)
+  mapSize,            // wrap the size facet
+  mapStyle,           // wrap the style facet (receive the base style record)
+  mount,
+  PartExt,
+  rect, rgb,
+  Stack, Row, Label,
+  Tokens,
+  withExt,            // scope 3: apply to one element at its use site
 } from "gratify";
 import { Button, Toggle } from "../shared/widgets";
 
-// ---- three reusable extensions (each is just a function) --------------------
+import { attachSourcePanel } from "../shared/source-panel";
+import mainSource from "./main.ts?raw";
+import widgetsSource from "../shared/widgets.ts?raw";
 
-/** Debug outline over ANY part — wraps render, paints after base. */
-const outlined: PartExt = mapRender((node, p, style, base) => {
-  base();
-  p.box(node.rect, 8, { r: 0, g: 0, b: 0, a: 0 }, { r: 255, g: 92, b: 108, a: 0.9 }, 1.5);
+// ── Three reusable extensions (each is just a function) ───────────────────────
+
+// 1. A red debug outline over ANY part: wrap render, call the base first,
+//    then paint on top of it.
+const outlined: PartExt = mapRender((node, painter, _style, drawBase) => {
+  drawBase();
+  painter.box(node.rect, 8, rgb(0, 0, 0, 0), rgb(255, 92, 108, 0.9), 1.5);
 });
 
-/** A hover sheen: appends its own channel + draws over the base. */
-const sheen: PartExt = (def) =>
-  mapRender((node, p, _s, base) => {
-    base();
-    const k = node.ch["fx/sheen"] || 0;
-    if (k > 0.02) {
+// 2. A hover sheen. This one needs its OWN animated value, so it appends a
+//    channel ("fx/sheen" — namespaced, since channels share the node) and
+//    wraps render to draw a light bar whose width follows the channel.
+const sheen: PartExt = (definition) => {
+  const withChannel = addChannels({
+    "fx/sheen": {
+      target: (node: GNode<unknown>) => node.ch.hover || 0,
+      rate: 6,
+    },
+  })(definition);
+
+  return mapRender((node, painter, _style, drawBase) => {
+    drawBase();
+    const sheenAmount = node.ch["fx/sheen"] || 0;
+    if (sheenAmount > 0.02) {
       const r = node.rect;
-      p.box(rect(r.x, r.y, r.w * k, 3), 1.5, calpha({ r: 255, g: 255, b: 255, a: 1 }, 0.35 * k));
+      painter.box(
+        rect(r.x, r.y, r.w * sheenAmount, 3), 1.5,
+        calpha(rgb(255, 255, 255), 0.35 * sheenAmount));
     }
-  })(addChannels({
-    "fx/sheen": { target: (n: GNode<unknown>) => n.ch.hover || 0, rate: 6 },
-  })(def));
+  })(withChannel);
+};
 
-/** Touch-target density: wraps size, minimum 44px tall. */
-const chunky: PartExt = mapSize((_props, _m, base) => ({ x: base.x + 16, y: Math.max(base.y, 44) }));
+// 3. Touch-target density: wrap size, enforce a 44px minimum height.
+const chunky: PartExt = mapSize((_props, _measure, baseSize) =>
+  ({ x: baseSize.x + 16, y: Math.max(baseSize.y, 44) }));
 
-/** Neon: a theme-scope restyle — receives the base style, states only deltas. */
-const neon: PartExt = mapStyle<{ fill: Color; edge: Color; text: Color }>(
-  (t: Tokens, ch: Channels, _props, base) => ({
-    ...base,
-    fill: t.mix(base.fill, t.accent2, 0.35 + 0.3 * ch.hover),
-    edge: t.mix(t.accent2, t.textBright, ch.hover * 0.5),
-    text: t.textBright,
+// 4. "Neon": a THEME-scope restyle. mapStyle receives the base style record,
+//    so we state only the fields we change — never restating the rest.
+interface Restylable { fill: Color; edge: Color; text: Color; }
+
+const neon: PartExt = mapStyle<Restylable>(
+  (tokens: Tokens, channels: Channels, _props, baseStyle) => ({
+    ...baseStyle,
+    fill: tokens.mix(baseStyle.fill, tokens.accent2, 0.35 + 0.3 * channels.hover),
+    edge: tokens.mix(tokens.accent2, tokens.textBright, channels.hover * 0.5),
+    text: tokens.textBright,
   }),
 );
 
-// ---- scope 1: bake a new named part -----------------------------------------
+// ── Scope 1: a new named part with the sheen baked in ─────────────────────────
+
 const FancyButton = derivePart("fancy-button", Button, sheen);
 
-// ---- the app ------------------------------------------------------------------
-interface Doc { clicks: number; neon: boolean; }
-type Intent = { kind: "click" } | { kind: "neon" };
+// ── The application ───────────────────────────────────────────────────────────
 
-function update(doc: Doc, i: Intent): Doc {
-  switch (i.kind) {
-    case "click": return { ...doc, clicks: doc.clicks + 1 };
-    case "neon": {
-      // scope 2: extend (or clear) the active theme for ALL buttons — including
-      // FancyButton, which extendTheme reaches through its ancestry.
-      const on = !doc.neon;
-      if (on) extendTheme("dark", "button", neon as (def: unknown) => unknown);
-      else clearThemeExt("dark", "button");
-      return { ...doc, neon: on };
+interface ExtensionsDocument {
+  clickCount: number;
+  neonActive: boolean;
+}
+
+type ExtensionsIntent = { kind: "clicked" } | { kind: "toggle-neon" };
+
+function update(document: ExtensionsDocument, intent: ExtensionsIntent): ExtensionsDocument {
+  switch (intent.kind) {
+
+    case "clicked":
+      return { ...document, clickCount: document.clickCount + 1 };
+
+    case "toggle-neon": {
+      const neonActive = !document.neonActive;
+      if (neonActive) {
+        // Scope 2: every part named "button" — or DERIVED from it, like
+        // FancyButton — gets the neon restyle while the dark theme is active.
+        extendTheme("dark", "button", neon as (definition: unknown) => unknown);
+      } else {
+        clearThemeExt("dark", "button");
+      }
+      return { ...document, neonActive };
     }
   }
 }
 
-function view(doc: Doc) {
+function view(document: ExtensionsDocument) {
   return Stack("root", { gap: 16, pad: 48 }, [
+
     Label("title", { text: "Wrap, don't edit", size: 20, weight: 600, bright: true }),
-    Label("sub", { text: `Clicks: ${doc.clicks}`, dim: true }),
-    Row("plain", { gap: 8 }, [
-      Button("a", { label: "Stock", press: { kind: "click" } }),
-      FancyButton("b", { label: "Fancy (baked sheen)", press: { kind: "click" } }),
-      withExt(Button("c", { label: "Outlined (this one only)", press: { kind: "click" } }), outlined),
-      withExt(Button("d", { label: "Chunky", press: { kind: "click" } }), chunky),
+    Label("subtitle", { text: `Clicks: ${document.clickCount}`, dim: true }),
+
+    Row("buttons", { gap: 8 }, [
+
+      // A completely stock button, for comparison.
+      Button("stock", { label: "Stock", press: { kind: "clicked" } }),
+
+      // Scope 1: the sheen is part of this part's definition now.
+      FancyButton("fancy", { label: "Fancy (baked sheen)", press: { kind: "clicked" } }),
+
+      // Scope 3: outlined — but ONLY this element.
+      withExt(
+        Button("outlined-one", { label: "Outlined (this one only)", press: { kind: "clicked" } }),
+        outlined),
+
+      // Scope 3 again: a bigger touch target for just this element.
+      withExt(
+        Button("chunky-one", { label: "Chunky", press: { kind: "clicked" } }),
+        chunky),
     ]),
-    Row("theme", { gap: 14 }, [
-      Label("tl", { text: "Neon all buttons (theme scope)", dim: true }),
-      Toggle("t", { on: doc.neon, flip: { kind: "neon" } }),
+
+    Row("theme-row", { gap: 14 }, [
+      Label("theme-caption", { text: "Neon all buttons (theme scope)", dim: true }),
+      Toggle("neon-toggle", { on: document.neonActive, flip: { kind: "toggle-neon" } }),
     ]),
-    Label("hint", { text: "Hover the fancy button — its sheen channel is an appended facet.", dim: true }),
+
+    Label("hint", {
+      text: "Hover the fancy button — its sheen channel is an appended facet.",
+      dim: true,
+    }),
   ]);
 }
 
+// ── Mount ─────────────────────────────────────────────────────────────────────
+
 const canvas = document.getElementById("c") as HTMLCanvasElement;
-mount(canvas, { init: { clicks: 0, neon: false }, update, view });
+
+mount(canvas, {
+  init: { clickCount: 0, neonActive: false },
+  update,
+  view,
+});
+
+attachSourcePanel([
+  { name: "main.ts", code: mainSource },
+  { name: "widgets.ts (shared)", code: widgetsSource },
+]);

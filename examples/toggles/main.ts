@@ -1,72 +1,156 @@
-// Example: toggles — proves custom parts are one part() definition each
-// (README §5). The toggle knob *overshoots* because its travel channel is a
-// spring; the slider knob glides because `shown` chases the model value; the
-// theme switch cross-fades every color on screen through the same channels.
+// ============================================================================
+// Example: toggles — custom widgets, springs, and a live theme cross-fade.
+//
+// What to look for when you run it:
+//   • The toggle knob OVERSHOOTS when it lands: its travel is a spring
+//     channel (see Toggle in widgets.ts), so it has momentum.
+//   • The slider knob glides to wherever the model says the value is — even
+//     when the change didn't come from the mouse.
+//   • Flip "Light theme": every color on screen cross-fades. That is not a
+//     feature of this file — token values ease like every other channel.
+//   • "Sparks" demonstrates a USE-SITE EXTENSION (composition scope 3): an
+//     effects-only press behavior appended to stock widgets that never
+//     planned for it.
+// ============================================================================
 
 import {
-  addOn, burst, Element, mount, PartExt, Press, setTheme, themeName, tokens,
-  Stack, Row, Label, withExt,
+  addOn,                    // extension helper: append interactors to a part
+  burst,                    // stock particle effect
+  Element,
+  mount,
+  PartExt,                  // the extension type: PartDef → PartDef
+  Press,
+  setTheme, themeName,      // live theme switching
+  tokens,
+  Stack, Row, Label,
+  withExt,                  // apply an extension to ONE element (use site)
 } from "gratify";
 import { Slider, Toggle, Checkbox } from "../shared/widgets";
 
-// "Sparks" is a USE-SITE EXTENSION (layering scope 3): an effects-only press
-// behavior appended to stock widgets. The widgets never planned for it.
+import { attachSourcePanel } from "../shared/source-panel";
+import mainSource from "./main.ts?raw";
+import widgetsSource from "../shared/widgets.ts?raw";
+
+// ── A use-site extension ──────────────────────────────────────────────────────
+//
+// `sparks` appends a Press behavior that spawns a particle burst and returns
+// null (meaning: no intent — effects only). ALL appended press behaviors run,
+// so the widget's own click handling is untouched.
+
 const sparks: PartExt = addOn(
-  Press((n) => { n.spawn?.(burst(n.pointer ?? n.rect.center, tokens.accent)); return null; }),
+  Press((node) => {
+    node.spawn?.(burst(node.pointer ?? node.rect.center, tokens.accent));
+    return null;
+  }),
 );
 
-interface Doc {
+// ── State ─────────────────────────────────────────────────────────────────────
+
+interface SettingsDocument {
   power: boolean;
-  volume: number;        // 0..1
-  glow: number;          // 0..1
-  opts: { sparks: boolean; grid: boolean };
-  light: boolean;
+  volume: number;           // 0..1
+  glow: number;             // 0..1
+  options: { sparks: boolean; grid: boolean };
+  lightTheme: boolean;
 }
 
-type Intent =
-  | { kind: "power" }
-  | { kind: "volume"; value: number }
-  | { kind: "glow"; value: number }
-  | { kind: "opt"; which: "sparks" | "grid" }
-  | { kind: "theme" };
+type SettingsIntent =
+  | { kind: "toggle-power" }
+  | { kind: "set-volume"; value: number }
+  | { kind: "set-glow"; value: number }
+  | { kind: "toggle-option"; which: "sparks" | "grid" }
+  | { kind: "toggle-theme" };
 
-function update(doc: Doc, i: Intent): Doc {
-  switch (i.kind) {
-    case "power": return { ...doc, power: !doc.power };
-    case "volume": return { ...doc, volume: i.value };
-    case "glow": return { ...doc, glow: i.value };
-    case "opt": return { ...doc, opts: { ...doc.opts, [i.which]: !doc.opts[i.which] } };
-    case "theme": {
+function update(document: SettingsDocument, intent: SettingsIntent): SettingsDocument {
+  switch (intent.kind) {
+
+    case "toggle-power":
+      return { ...document, power: !document.power };
+
+    case "set-volume":
+      return { ...document, volume: intent.value };
+
+    case "set-glow":
+      return { ...document, glow: intent.value };
+
+    case "toggle-option":
+      return {
+        ...document,
+        options: { ...document.options, [intent.which]: !document.options[intent.which] },
+      };
+
+    case "toggle-theme": {
+      // setTheme retargets the live tokens; every style function reads tokens
+      // every frame, so the whole UI cross-fades to the new palette.
       setTheme(themeName === "dark" ? "light" : "dark");
-      return { ...doc, light: !doc.light };
+      return { ...document, lightTheme: !document.lightTheme };
     }
   }
 }
 
-const row = (key: string, label: string, w: Element) =>
-  Row(key, { gap: 14 }, [Label(`${key}/l`, { text: label, dim: true }), w]);
+// ── View ──────────────────────────────────────────────────────────────────────
 
-function view(doc: Doc) {
-  // when Sparks is on, every clickable widget gets the extension at its use site
-  const juiced = (el: Element) => (doc.opts.sparks ? withExt(el, sparks) : el);
-  return Stack("root", { gap: 14, pad: 48 }, [
-    Label("title", { text: "Widgets", size: 20, weight: 600, bright: true }),
-    row("power", "Power", juiced(Toggle("t", { on: doc.power, flip: { kind: "power" } }))),
-    row("volume", "Volume", Slider("s", { value: doc.volume, set: (value) => ({ kind: "volume", value }) })),
-    row("glow", "Glow", Slider("s", { value: doc.glow, set: (value) => ({ kind: "glow", value }) })),
-    row("sparks", "Sparks", juiced(Checkbox("c", { on: doc.opts.sparks, toggle: { kind: "opt", which: "sparks" } }))),
-    row("grid", "Grid", juiced(Checkbox("c", { on: doc.opts.grid, toggle: { kind: "opt", which: "grid" } }))),
-    row("theme", "Light theme", juiced(Toggle("t", { on: doc.light, flip: { kind: "theme" } }))),
-    Label("hint", { text: "Sparks = a press extension appended to stock widgets at their use site.", dim: true }),
+/** A labeled settings row: caption on the left, widget on the right. */
+function settingsRow(key: string, caption: string, widget: Element): Element {
+  return Row(key, { gap: 14 }, [
+    Label(`${key}/caption`, { text: caption, dim: true }),
+    widget,
   ]);
 }
 
+function view(document: SettingsDocument) {
+
+  // When Sparks is enabled, wrap each clickable widget with the extension —
+  // at its use site, per element, without touching the widget definitions.
+  const withSparks = (element: Element): Element =>
+    document.options.sparks ? withExt(element, sparks) : element;
+
+  return Stack("root", { gap: 14, pad: 48 }, [
+
+    Label("title", { text: "Widgets", size: 20, weight: 600, bright: true }),
+
+    settingsRow("power", "Power",
+      withSparks(Toggle("widget", { on: document.power, flip: { kind: "toggle-power" } }))),
+
+    settingsRow("volume", "Volume",
+      Slider("widget", { value: document.volume, set: (value) => ({ kind: "set-volume", value }) })),
+
+    settingsRow("glow", "Glow",
+      Slider("widget", { value: document.glow, set: (value) => ({ kind: "set-glow", value }) })),
+
+    settingsRow("sparks", "Sparks",
+      withSparks(Checkbox("widget", { on: document.options.sparks, toggle: { kind: "toggle-option", which: "sparks" } }))),
+
+    settingsRow("grid", "Grid",
+      withSparks(Checkbox("widget", { on: document.options.grid, toggle: { kind: "toggle-option", which: "grid" } }))),
+
+    settingsRow("theme", "Light theme",
+      withSparks(Toggle("widget", { on: document.lightTheme, flip: { kind: "toggle-theme" } }))),
+
+    Label("hint", {
+      text: "Sparks = a press extension appended to stock widgets at their use site.",
+      dim: true,
+    }),
+  ]);
+}
+
+// ── Mount ─────────────────────────────────────────────────────────────────────
+
 const canvas = document.getElementById("c") as HTMLCanvasElement;
+
 mount(canvas, {
   init: {
-    power: true, volume: 0.6, glow: 0.25,
-    opts: { sparks: true, grid: false }, light: false,
+    power: true,
+    volume: 0.6,
+    glow: 0.25,
+    options: { sparks: true, grid: false },
+    lightTheme: false,
   },
   update,
   view,
 });
+
+attachSourcePanel([
+  { name: "main.ts", code: mainSource },
+  { name: "widgets.ts (shared)", code: widgetsSource },
+]);

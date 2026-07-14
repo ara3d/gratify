@@ -1,61 +1,151 @@
-// Example: undo — proves app-wide policy middleware (README "undo/redo as a
-// three-line middleware"). The app knows nothing about history: withUndo(app)
-// wraps it. Undoing a delete replays the dot's ENTER animation — to Gratify,
-// undo is just another state change, so it animates like everything else.
+// ============================================================================
+// Example: undo — app-wide policies as update middleware.
+//
+// What to look for when you run it:
+//   • This app knows NOTHING about history. Its update function below handles
+//     add / remove / shuffle, nothing else. The single call `withUndo(app)` at
+//     the bottom wraps it, adding {kind:"undo"} / {kind:"redo"} handling and
+//     the past/present/future bookkeeping.
+//   • Delete a dot, then press Undo: the dot pops back in through its ENTER
+//     animation. To Gratify, undo is just another state change — so it
+//     animates like every other state change.
+//   • Press Shuffle: the hues cross-fade rather than snapping, because each
+//     dot declares a `hue` CHANNEL that chases its prop.
+// ============================================================================
 
-import { mount, part, withUndo, hsl, Stack, Row, Label, v, GNode } from "gratify";
+import {
+  mount,
+  part,
+  withUndo,       // the middleware: AppSpec → undoable AppSpec
+  hsl,            // hue/saturation/lightness → Color
+  Stack, Row, Label,
+  v,
+  GNode,
+} from "gratify";
 import { Button } from "../shared/widgets";
 
-interface Dot { id: string; hue: number; }
-interface Doc { dots: Dot[]; next: number; }
+import { attachSourcePanel } from "../shared/source-panel";
+import mainSource from "./main.ts?raw";
 
-type Intent = { kind: "add" } | { kind: "pop" } | { kind: "shuffle" };
+// ── State ─────────────────────────────────────────────────────────────────────
 
-function update(doc: Doc, i: Intent): Doc {
-  switch (i.kind) {
-    case "add":
-      return { next: doc.next + 1, dots: [...doc.dots, { id: `d${doc.next}`, hue: (doc.next * 47) % 360 }] };
-    case "pop":
-      return { ...doc, dots: doc.dots.slice(0, -1) };
+interface ColoredDot {
+  id: string;
+  hue: number;    // 0..360
+}
+
+interface DotsDocument {
+  dots: ColoredDot[];
+  nextIdNumber: number;
+}
+
+type DotsIntent =
+  | { kind: "add" }
+  | { kind: "remove-last" }
+  | { kind: "shuffle" };
+// Note: "undo" and "redo" are NOT here — withUndo adds them.
+
+function update(document: DotsDocument, intent: DotsIntent): DotsDocument {
+  switch (intent.kind) {
+
+    case "add": {
+      const newDot: ColoredDot = {
+        id: `dot-${document.nextIdNumber}`,
+        hue: (document.nextIdNumber * 47) % 360,   // spread hues around the wheel
+      };
+      return {
+        nextIdNumber: document.nextIdNumber + 1,
+        dots: [...document.dots, newDot],
+      };
+    }
+
+    case "remove-last":
+      return { ...document, dots: document.dots.slice(0, -1) };
+
     case "shuffle":
-      return { ...doc, dots: doc.dots.map((d) => ({ ...d, hue: (d.hue + 120) % 360 })) };
+      return {
+        ...document,
+        dots: document.dots.map((dot) => ({ ...dot, hue: (dot.hue + 120) % 360 })),
+      };
   }
 }
 
-// A dot: hue eases via a declared channel, so shuffle (and un-shuffle) fades.
-interface DotProps { hue: number; }
-const DotPart = part<DotProps>("dot", {
+// ── A dot widget with a declared channel ──────────────────────────────────────
+//
+// The `hue` channel chases the prop at a gentle rate, so when shuffle (or
+// un-shuffle, via undo!) changes the prop, the drawn color eases over.
+
+interface DotProps {
+  hue: number;
+}
+
+const ColorDot = part<DotProps>("color-dot", {
+
   size: () => v(26, 26),
+
   channels: {
-    hue: { target: (n: GNode<DotProps>) => n.props.hue, rate: 8 },
+    hue: {
+      target: (node: GNode<DotProps>) => node.props.hue,
+      rate: 8,                       // exponential ease — no overshoot for color
+    },
   },
-  render(node, p) {
-    p.glow(hsl(node.ch.hue, 0.8, 0.6), 6 + 6 * node.ch.hover, () =>
-      p.dot(node.rect.center, 11 + 2 * node.ch.hover, hsl(node.ch.hue, 0.8, 0.62)));
+
+  render(node, painter) {
+    const animatedHue = node.ch.hue;
+    const glowAmount = 6 + 6 * node.ch.hover;
+    const radius = 11 + 2 * node.ch.hover;
+
+    painter.glow(hsl(animatedHue, 0.8, 0.6), glowAmount, () =>
+      painter.dot(node.rect.center, radius, hsl(animatedHue, 0.8, 0.62)));
   },
-  on: [], // hoverable, no intents
 });
 
-function view(doc: Doc) {
+// ── View ──────────────────────────────────────────────────────────────────────
+
+function view(document: DotsDocument) {
   return Stack("root", { gap: 16, pad: 48 }, [
+
     Label("title", { text: "Undoable dots", size: 20, weight: 600, bright: true }),
+
     Row("toolbar", { gap: 8 }, [
       Button("add", { label: "+ Dot", press: { kind: "add" }, accent: true }),
-      Button("pop", { label: "Remove", press: { kind: "pop" }, danger: true }),
+      Button("remove", { label: "Remove", press: { kind: "remove-last" }, danger: true }),
       Button("shuffle", { label: "Shuffle hues", press: { kind: "shuffle" } }),
     ]),
-    Row("dots", { gap: 8 }, doc.dots.map((d) => DotPart(d.id, { hue: d.hue }))),
+
+    // The dots themselves — keyed by id, so enter/exit animations work.
+    Row("dots", { gap: 8 },
+      document.dots.map((dot) => ColorDot(dot.id, { hue: dot.hue }))),
+
+    // These buttons dispatch intents the app's update never sees:
+    // withUndo intercepts them and walks the history instead.
     Row("history", { gap: 8 }, [
       Button("undo", { label: "⟲ Undo", press: { kind: "undo" } }),
       Button("redo", { label: "⟳ Redo", press: { kind: "redo" } }),
     ]),
-    Label("hint", { text: "Delete a dot, then undo — it pops back in through its enter animation.", dim: true }),
+
+    Label("hint", {
+      text: "Delete a dot, then undo — it pops back in through its enter animation.",
+      dim: true,
+    }),
   ]);
 }
 
+// ── Mount — note the one-word difference: withUndo( … ) ──────────────────────
+
 const canvas = document.getElementById("c") as HTMLCanvasElement;
+
 mount(canvas, withUndo({
-  init: { dots: [{ id: "d-a", hue: 10 }, { id: "d-b", hue: 130 }, { id: "d-c", hue: 250 }], next: 0 },
+  init: {
+    dots: [
+      { id: "dot-a", hue: 10 },
+      { id: "dot-b", hue: 130 },
+      { id: "dot-c", hue: 250 },
+    ],
+    nextIdNumber: 0,
+  },
   update,
   view,
 }));
+
+attachSourcePanel([{ name: "main.ts", code: mainSource }]);
