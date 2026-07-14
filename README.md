@@ -71,38 +71,43 @@ That's a complete app. Notice what you did **not** write: no event-listener plum
 
 Gratify runs on **two clocks**. The *state clock* turns only when an intent arrives (a few times a second at most): it folds the intent into a new immutable `Doc`, then re-derives a cheap `Element` description with `view(doc)`. That description is reconciled — matched by key — against a *retained* `Instance` tree, so a widget keeps its springs and channels across rebuilds and always knows where it *was*. The *frame clock* then does the smooth work every frame: lay out (reflowing via springs), step each channel toward its target, resolve `style`, and paint to the canvas. When nothing is moving, the frame loop **sleeps** — an idle UI costs zero CPU.
 
-```mermaid
-flowchart TD
-    Input["input — pointer / keyboard"]
-
-    subgraph SC["STATE CLOCK · on each intent (a few ×/sec)"]
-      direction TB
-      Doc["Doc — immutable state you own"]
-      Update["update(doc, intent) → Doc"]
-      View["view(doc) → Element tree (pure description)"]
-      Update --> Doc --> View
-    end
-
-    subgraph FC["FRAME CLOCK · every frame · sleeps at rest"]
-      direction TB
-      Inst["Instance tree — retained; keeps springs + channels"]
-      Layout["layout — measure(avail) / arrange, reflow via springs"]
-      Chan["channels — chase targets (spring / ease)"]
-      Paint["paint — style(tokens, ch, props) → render()"]
-      Inst --> Layout --> Chan --> Paint
-    end
-
-    Input -->|"interactors emit intents"| Update
-    View -->|"reconcile — match by key, reuse instances"| Inst
-    Paint --> Canvas(["&lt;canvas&gt;"])
-```
-
 **The three moving parts of every widget:**
 
-- A **part** is a bundle of small *facets* — `size`/`measure`+`arrange` (two-phase geometry), `style` (tokens + channels → resolved values), `render` (paint the values), `body` (compose child parts), `on` (interactors), plus `channels`, `anchors`, `adorn`. All optional; you write only what a given widget needs.
+- A **part** is a bundle of small *facets* — declarations, all optional; you write only what a given widget needs. See [The facets](#the-facets) below.
 - The **house form is the builder**: `part("chip").props<ChipProps>().defaults({ w: 60 }).size(…).style(…).render(…)`. Each step is a typed inference boundary (no curried `()` trick), every prefix is already a usable part, and the type system enforces the facet rules — leaf (`.size`/`.intrinsic`) vs. container (`.measure`/`.arrange`/`.fill`/`.pack`) vs. composite (`.body`) are mutually exclusive, `.style` precedes `.render`, `.defaults` makes defaulted props non-optional inside facets (no more `?? 8`), and `.pack()` derives both layout phases from one packing function so they cannot desync. `extendPart(name, base)` re-opens any part with the same vocabulary. Interactor sugar — `.press()`, `.drag1d()`, `.gesture()` (private state inferred from `begin`), `.keys()` — fixes the prop type from the chain, and `.channels()` feeds `node.ch.` autocomplete. Extensions are prop-typed too (`PartExt<P>`, `PropsOf`); `derivePart` types inline wrappers against the base's props. The spec-object forms of `part()` still work.
 - **Channels** are the animation substrate. There are no timelines or `animate()` calls — every visual number is a channel chasing a state-derived target, so motion is a side effect of *describing* the target, not of scripting the transition.
 - **Extensions** (`mapStyle`, `mapRender`, `addOn`, `mapBody`, …) wrap or append facets, and apply at three scopes — one part definition, a whole theme, or a single element — so you customize by composition, never by editing.
+
+### The facets
+
+A part is nothing but a named bundle of these declarations. They fall into four groups; within each, a facet answers one question and reads only what that question needs.
+
+**Geometry — how big am I, and where do my children go?** Layout runs in two phases: a top-down *measure* pass asks every node "given at most this much room, how big do you want to be?", then an *arrange* pass hands each node its final box. A part plays exactly one geometric role:
+
+- **`size(props, m) → Vec`** — a *leaf*'s intrinsic size, independent of available room. `m.text(s)` measures text runs. This is the 80% case: buttons, labels, knobs. Builder sugar `intrinsic(w, h)` covers the constant case.
+- **`measure(props, avail, m) → Vec`** — a *container*'s desired size given at most `avail` room (an axis may be `Infinity`: "size to your content"). The part chooses each child's constraint and asks for its size through `m.children(avail)` / `m.child(i, avail)` (memoized per pass). Only needed when size depends on offered room — wrap, fill, aspect ratio. The builder's `fill()` is the one-liner for "take everything I'm offered."
+- **`arrange(props, rect, kids) → Rect[]`** — place children inside the final rect (which may be larger than requested), returning one absolute rect per child; each `kid.size` is the desired size from the measure phase. The one rule: arrange children at the extent you measured them with. The builder's `pack(fn)` derives *both* phases from a single packing function, making that rule unbreakable.
+- **`body(props, children) → Element[]`** — a *composite*: derive child elements from props (parts made of parts). Runs on the state clock, never per frame — structure is a function of state; motion stays in channels. The use-site `children` arrive as an argument so the composite can place its content slot. A part with `body` leaves geometry to the parts it expands into.
+
+Defaults for all of these exist: no `size`/`measure` means "union of my children"; no `arrange` means "children at my origin, at their desired size." A pure layout container typically declares only `measure` + `arrange` and nothing below.
+
+**Appearance — what do I look like right now?** Split in two so *deciding* values and *painting* them never mix:
+
+- **`style(tokens, ch, props) → S`** — resolve a flat record of visual values from theme tokens blended by channel values (`t.mix(t.surface, t.accent, ch.hover)`). This is the only place a part may touch tokens (enforced by `npm run check`), which is what makes every part restylable and theme-crossfadable from outside.
+- **`render(node, painter, style) → void`** — paint, reading only `node.rect` and the resolved style record. No decisions here; if render wants a token, that value belongs in `style`.
+
+**Behavior — what does input mean here?**
+
+- **`on: Interactor[]`** — input as *values*, not handlers: `Press`, `Drag1D`, `Gesture` (private state + query + overlay preview), `Keys`, `Pan`, `Focusable`, `Hover`. Interactors emit app intents and set tags; they never touch the doc or the scene. The builder's `press`/`drag1d`/`gesture`/`keys` sugar declares them with props already typed.
+- **`hit(node, p) → boolean`** — custom hit test when the rect is wrong (distance-to-curve for wires, enlarged grab zones). Default: the rect.
+
+**Garnish — what rides along?**
+
+- **`channels: Record<name, ChannelSpec>`** — extra animated values beyond the automatic `hover`/`press`/`drag`/`focus`/`enter`/`exit`: a `target` chased by a `spring` (overshoot) or `rate` (ease), or a `decay` impulse kicked by `node.kick(name)`. Namespace custom ones (`"fx/sheen"`).
+- **`anchors(node) → {id, pos}[]`** — publish named world-space points (sockets, ports) each layout pass; wires, magnetic snapping, and effects resolve geometry through the anchor registry instead of reaching into other parts.
+- **`adorn(node) → Element[]`** — overlay elements anchored to this host: tooltips, badges, resize grips, close buttons. Runs every frame, so it may read channels to appear and disappear (keyed, so enter/exit plays); results render above all content and may carry their own interactors. `addAdorn(...)` layers one onto any part that never planned for it.
+
+One prop-side note: `defaults` (set via the builder's `.defaults({...})`) merges under use-site props at element creation, so every facet above reads complete props — `p.gap`, never `p.gap ?? 8`.
 
 ---
 
