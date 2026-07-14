@@ -36,7 +36,6 @@ import {
   part,
   Press,
   rect, rgb,
-  tokens,
   v, Vec, vdist,
   wireDist,         // distance from a point to a wire curve (hit-testing)
   Stack, Label,
@@ -258,7 +257,7 @@ const GraphNodePart = part<NodeProps, NodeStyle>("graph-node", {
 
       up(state, node) {
         if (!state.snap) return;                                  // dropped on nothing
-        node.spawn?.(burst(state.snap.pos, tokens.accent));       // one-shot juice
+        node.spawn?.(burst(state.snap.pos, SNAP_SPARK));          // one-shot juice
         return { kind: "connect", a: state.fromAnchorId, b: state.snap.id };
       },
     }),
@@ -289,12 +288,21 @@ interface WireProps {
   states?: Record<string, boolean>;
 }
 
+// A fixed accent for the one-shot connect spark. A part-defining file may not
+// import the `tokens` singleton (npm run check), and a gesture callback has no
+// style facet to read; a constant juice color is fine for a transient burst.
+const SNAP_SPARK = rgb(64, 186, 255);
+
 const Wire = part<WireProps, { color: Color; selected: number }>("wire", {
 
-  style: (t, channels) => ({
-    color: t.accent,
-    selected: channels.sel || 0,     // the `sel` state tag, eased 0..1
-  }),
+  // The gold selection blend is resolved HERE, in style — render just paints it.
+  style: (t, channels) => {
+    const selected = channels.sel || 0;     // the `sel` state tag, eased 0..1
+    return {
+      color: selected > 0.02 ? t.mix(t.accent, rgb(255, 200, 80), selected) : t.accent,
+      selected,
+    };
+  },
 
   // Custom hit test: a wire is "hit" when the pointer is within 8 world px
   // of its curve — not its bounding rect.
@@ -312,10 +320,7 @@ const Wire = part<WireProps, { color: Color; selected: number }>("wire", {
     // Shadow pass, then the wire itself. Selection blends toward gold and
     // thickens; hover thickens slightly (the affordance for "clickable").
     painter.wire(a, b, calpha(rgb(0, 0, 0), 0.35), 4.5);
-    const color = style.selected > 0.02
-      ? tokens.mix(style.color, rgb(255, 200, 80), style.selected)
-      : style.color;
-    painter.wire(a, b, calpha(color, 0.9), 2.2 + 1.6 * style.selected + 0.8 * node.ch.hover);
+    painter.wire(a, b, calpha(style.color, 0.9), 2.2 + 1.6 * style.selected + 0.8 * node.ch.hover);
   },
 
   on: [

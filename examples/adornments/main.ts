@@ -20,7 +20,7 @@
 
 import {
   addAdorn, at, calpha, cmix, Color, GNode, mount, PartExt, part, Press, rect,
-  rgb, tokens, v, Vec, withExt, Stack, Label,
+  rgb, v, Vec, withExt, Stack, Label,
 } from "gratify";
 import { Button } from "../shared/widgets";
 
@@ -76,26 +76,27 @@ const Card = part<CardProps, { fill: Color; edge: Color; text: Color }>("card", 
 
 // A tooltip bubble that self-centers above an anchor point (so it can overflow
 // the host). Decorative — no interactors — so it stays transparent to clicks.
-const Tooltip = part<{ text: string; anchor: Vec }>("tooltip", {
+const Tooltip = part<{ text: string; anchor: Vec }>()("tooltip", {
   size: (props, measure) => v(measure.text(props.text).x + 20, 28),
-  render(node, paint) {
+  style: (t) => ({ bubble: cmix(t.bg, rgb(0, 0, 0), 0.45), edge: calpha(t.accent, 0.5), text: t.textBright, pointer: calpha(t.accent, 0.7) }),
+  render(node, paint, s) {
     const a = node.props.anchor;
     const w = paint.measure.text(node.props.text).x + 20;
     const box = rect(a.x - w / 2, a.y - 34, w, 26);
-    const bubble = cmix(tokens.bg, rgb(0, 0, 0), 0.45);
-    paint.glow(rgb(0, 0, 0), 12, () => paint.box(box, 7, bubble, calpha(tokens.accent, 0.5), 1));
-    paint.label(node.props.text, box.center, tokens.textBright, { size: 12 });
-    paint.dot(v(a.x, a.y - 6), 2.5, calpha(tokens.accent, 0.7));   // a little pointer
+    paint.glow(rgb(0, 0, 0), 12, () => paint.box(box, 7, s.bubble, s.edge, 1));
+    paint.label(node.props.text, box.center, s.text, { size: 12 });
+    paint.dot(v(a.x, a.y - 6), 2.5, s.pointer);   // a little pointer
   },
 });
 
 // A count badge at a corner. Decorative.
-const Badge = part<{ count: number }>("badge", {
+const Badge = part<{ count: number }>()("badge", {
   size: () => v(22, 22),
-  render(node, paint) {
+  style: (t) => ({ accent: t.accent, text: t.textBright }),
+  render(node, paint, s) {
     const c = node.rect.center;
-    paint.glow(tokens.accent, 8 * (0.5 + 0.5 * node.ch.enter), () => paint.dot(c, 10, tokens.accent));
-    paint.label(String(node.props.count), c, tokens.textBright, { size: 11, weight: 700 });
+    paint.glow(s.accent, 8 * (0.5 + 0.5 * node.ch.enter), () => paint.dot(c, 10, s.accent));
+    paint.label(String(node.props.count), c, s.text, { size: 11, weight: 700 });
   },
 });
 
