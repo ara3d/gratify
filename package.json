@@ -6,7 +6,8 @@
   "main": "src/gratify/index.ts",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-boundary.mjs && tsc --noEmit && vite build",
+    "build": "node scripts/check-boundary.mjs && tsc --noEmit && node scripts/clean-docs.mjs && vite build",
+    "preview": "vite preview",
     "check": "node scripts/check-boundary.mjs && tsc --noEmit",
     "test": "vitest run"
   },

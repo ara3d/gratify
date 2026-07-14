@@ -2,12 +2,17 @@ import { defineConfig } from "vite";
 import { resolve } from "path";
 
 // Multi-page: gallery root + one page per example.
+// The build deploys to GitHub Pages from docs/ (served at /gratify/), so the
+// base is relative and all hand-written links in the HTML are relative too.
 export default defineConfig({
+  base: "./",
   resolve: {
     alias: { gratify: resolve(__dirname, "src/gratify/index.ts") },
   },
   server: { port: 5199 },
   build: {
+    outDir: "docs",
+    emptyOutDir: false,       // scripts/clean-docs.mjs empties it, keeping *.md
     rollupOptions: {
       input: {
         index: resolve(__dirname, "index.html"),
