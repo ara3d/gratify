@@ -6,6 +6,9 @@
 
 ### ▶ [Try the live demo](https://ara3d.github.io/gratify/) · [Source on GitHub](https://github.com/ara3d/gratify)
 
+https://github.com/user-attachments/assets/f77ac0bb-bc53-486d-b51c-a19362b6ed0c
+
+
 It renders your whole UI to a single `<canvas>` (no DOM, no CSS), keeps a living, animated scene in sync with your state, and asks you to learn exactly two mechanisms: **pure functions over state** for *describing* the UI, and **channels** — named numbers that continuously chase their targets — for *changing* it. Hover glows, press dips, spring-loaded toggles, drag-with-momentum, enter/exit, theme cross-fades: the micro-interactions that normally take a pile of hand-written animation code are the default here, for free. Buttons, forms, dashboards, node editors, timelines, game HUDs — the same primitives cover all of it.
 
 > You describe what the UI should be for the current state. Gratify keeps a retained, animated scene in sync with that description. Everything that changes, tweens.
