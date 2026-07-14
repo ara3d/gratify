@@ -4,18 +4,25 @@
 
 **Gratify is a TypeScript, canvas-rendered UI framework for building interfaces rich with micro-interactions — where every state change animates itself and every widget composes.**
 
-### ▶ [Try the live demo](https://ara3d.github.io/gratify/) · [Source on GitHub](https://github.com/ara3d/gratify)
+[![npm](https://img.shields.io/npm/v/gratify.svg)](https://www.npmjs.com/package/gratify)
+[![license](https://img.shields.io/npm/l/gratify.svg)](https://github.com/ara3d/gratify/blob/main/LICENSE)
+
+### ▶ [Try the live demo](https://ara3d.github.io/gratify/) · [Source on GitHub](https://github.com/ara3d/gratify) · [npm](https://www.npmjs.com/package/gratify)
+
+```bash
+npm install gratify
+```
 
 https://github.com/user-attachments/assets/f77ac0bb-bc53-486d-b51c-a19362b6ed0c
 
+> **Status: experimental (v0.0.1, published on npm as [`gratify`](https://www.npmjs.com/package/gratify)).** The kernel, layout, interactors, extensions, themes, anchors, and adornments all work — every claim below has a [running example](https://ara3d.github.io/gratify/). Not built yet: instance-local state and modal popups (dropdowns); **text input is deliberately out of scope for now**, so this is for canvas-first UIs (dashboards, editors, HUDs), not text-heavy forms. Desktop-browser-first: keyboard focus and key routing work, but screen readers see only a `<canvas>`, and mobile/touch is untested. Expect API churn before 0.1.
 
-It renders your whole UI to a single `<canvas>` (no DOM, no CSS), keeps a living, animated scene in sync with your state, and asks you to learn exactly two mechanisms: **pure functions over state** for *describing* the UI, and **channels** — named numbers that continuously chase their targets — for *changing* it. Hover glows, press dips, spring-loaded toggles, drag-with-momentum, enter/exit, theme cross-fades: the micro-interactions that normally take a pile of hand-written animation code are the default here, for free. Buttons, forms, dashboards, node editors, timelines, game HUDs — the same primitives cover all of it.
+It renders your whole UI to a single `<canvas>` (no DOM, no CSS), keeps a living, animated scene in sync with your state, and asks you to learn exactly two mechanisms: **pure functions over state** for *describing* the UI, and **channels** — named numbers that continuously chase their targets — for *changing* it. Hover glows, press dips, spring-loaded toggles, drag-with-momentum, enter/exit, theme cross-fades: the micro-interactions that normally take a pile of hand-written animation code are the default here, for free. Buttons, toggles, sliders, dashboards, node editors, timelines, game HUDs — the same primitives cover all of it.
 
 > You describe what the UI should be for the current state. Gratify keeps a retained, animated scene in sync with that description. Everything that changes, tweens.
 
 ```ts
-import { mount, part, Press, Stack, Label, v } from "gratify";
-import type { Channels, Color, Tokens } from "gratify";
+import { mount, part, Stack, Label, v } from "gratify";
 
 // 1. State — plain immutable data that you own. It knows nothing about pixels.
 type Doc = { count: number };
@@ -25,30 +32,27 @@ function update(doc: Doc, intent: Intent): Doc {
   return intent.kind === "increment" ? { count: doc.count + 1 } : doc;
 }
 
-// 2. A widget ("part") — size, style, render, and behavior in one definition.
-//    The style/render split is deliberate: `style` decides what things look
-//    like, `render` just paints the result. State the props type once via the
-//    curried `part<Props>()`; the style record is inferred — no named interface.
-type ButtonProps = { label: string; press: Intent };
-
-const Button = part<ButtonProps>()("button", {
-  size: (props, measure) => v(measure.text(props.label).x + 28, 34),
+// 2. A widget ("part") — size, style, render, and behavior in one chained
+//    definition. The style/render split is deliberate: `style` decides what
+//    things look like, `render` just paints the result.
+const Button = part("button")
+  .props<{ label: string; press: Intent }>()
+  .size((props, measure) => v(measure.text(props.label).x + 28, 34))
 
   // `channels.hover` and `channels.press` ease between 0 and 1 as the pointer
   // interacts, so anything you compute from them animates for free.
-  style: (tokens, channels) => ({
+  .style((tokens, channels) => ({
     fill: tokens.mix(tokens.surface, tokens.accent, 0.2 + 0.3 * channels.hover + 0.4 * channels.press),
     lift: 2 * channels.hover - 2 * channels.press,
     text: tokens.text,
-  }),
+  }))
 
-  render: (node, paint, style) => {
+  .render((node, paint, style) => {
     paint.box(node.rect.raise(style.lift), 8, style.fill);
     paint.label(node.props.label, node.rect.center, style.text);
-  },
+  })
 
-  on: [Press((node) => node.props.press)],
-});
+  .press((node) => node.props.press);
 
 // 3. The view — a pure function from state to an element tree.
 function view(doc: Doc) {
@@ -58,56 +62,113 @@ function view(doc: Doc) {
   ]);
 }
 
-// 4. Mount onto a canvas.
+// 4. Mount onto a canvas: <canvas id="app"></canvas> is the only HTML you need.
 const canvas = document.getElementById("app") as HTMLCanvasElement;
 mount(canvas, { init: { count: 0 }, update, view });
 ```
 
-That's a complete app. Notice what you did **not** write: no event-listener plumbing, no "add the label to the panel", no hover handler, no animation code. Yet at runtime the button breathes — it brightens and lifts on hover, sinks on press, and every state change glides instead of snapping.
+That — plus one `<canvas>` tag — is a complete app.
+
+Notice what you did **not** write: no event-listener plumbing, no "add the label to the panel", no hover handler, no animation code. Yet at runtime the button breathes — it brightens and lifts on hover, sinks on press, and every state change glides instead of snapping.
+
+(This is the builder form of `part()` — the house style. A spec-object form also exists; see [Architecture](#architecture).)
+
+---
+
+## Getting started
+
+Gratify is not yet published to npm — for now, clone and run:
+
+```bash
+git clone https://github.com/ara3d/gratify.git
+cd gratify
+npm install
+npm run dev      # http://localhost:5199 — the examples gallery
+npm run test     # headless kernel tests (deterministic step())
+npm run check    # boundary check + typecheck
+```
+
+Every idea in this README has a running example. Rather than list them here, browse the **[live gallery ▶](https://ara3d.github.io/gratify/)** (or run `npm run dev`) — from the hello-world counter through a full pan/zoom node editor and a 15-control widget board. Each page shows its own source next to the running app, so you can read exactly the code that produced what you're looking at. Copy the example nearest your use case as a starting point.
+
+- **Plan** — the roadmap and design record: [`docs/plan.md`](docs/plan.md)
 
 ---
 
 ## Architecture
 
-Gratify runs on **two clocks**. The *state clock* turns only when an intent arrives (a few times a second at most): it folds the intent into a new immutable `Doc`, then re-derives a cheap `Element` description with `view(doc)`. That description is reconciled — matched by key — against a *retained* `Instance` tree, so a widget keeps its springs and channels across rebuilds and always knows where it *was*. The *frame clock* then does the smooth work every frame: lay out (reflowing via springs), step each channel toward its target, resolve `style`, and paint to the canvas. When nothing is moving, the frame loop **sleeps** — an idle UI costs zero CPU.
+Everything in the example above is one of four things. From the code you write down to the runtime that executes it:
 
-**The three moving parts of every widget:**
+1. **State** — your `Doc`, your `update`, your `view`. Pure functions, plain data.
+2. **Parts** — widget definitions, built up facet by facet.
+3. **Channels** — the numbers that animate.
+4. **Extensions** — how anything gets customized.
 
-- A **part** is a bundle of small *facets* — declarations, all optional; you write only what a given widget needs. See [The facets](#the-facets) below.
-- The **house form is the builder**: `part("chip").props<ChipProps>().defaults({ w: 60 }).size(…).style(…).render(…)`. Each step is a typed inference boundary (no curried `()` trick), every prefix is already a usable part, and the type system enforces the facet rules — leaf (`.size`/`.intrinsic`) vs. container (`.measure`/`.arrange`/`.fill`/`.pack`) vs. composite (`.body`) are mutually exclusive, `.style` precedes `.render`, `.defaults` makes defaulted props non-optional inside facets (no more `?? 8`), and `.pack()` derives both layout phases from one packing function so they cannot desync. `extendPart(name, base)` re-opens any part with the same vocabulary. Interactor sugar — `.press()`, `.drag1d()`, `.gesture()` (private state inferred from `begin`), `.keys()` — fixes the prop type from the chain, and `.channels()` feeds `node.ch.` autocomplete. Extensions are prop-typed too (`PartExt<P>`, `PropsOf`); `derivePart` types inline wrappers against the base's props. The spec-object forms of `part()` still work.
-- **Channels** are the animation substrate. There are no timelines or `animate()` calls — every visual number is a channel chasing a state-derived target, so motion is a side effect of *describing* the target, not of scripting the transition.
-- **Extensions** (`mapStyle`, `mapRender`, `addOn`, `mapBody`, …) wrap or append facets, and apply at three scopes — one part definition, a whole theme, or a single element — so you customize by composition, never by editing.
+### State
 
-### The facets
+Your app state is a plain immutable `Doc`. The only way it changes is a typed `Intent` passing through one pure function, `update(doc, intent) → doc`. The UI is another pure function, `view(doc) → Element tree`. Elements are cheap descriptions, rebuilt from scratch on every state change — the framework matches them by key against the widgets already on screen, so a widget that survives a rebuild keeps its animation state and knows where it was.
 
-A part is nothing but a named bundle of these declarations. They fall into four groups; within each, a facet answers one question and reads only what that question needs.
+That's the whole state story. There is no `useState`, no binding, no hidden framework state.
 
-**Geometry — how big am I, and where do my children go?** Layout runs in two phases: a top-down *measure* pass asks every node "given at most this much room, how big do you want to be?", then an *arrange* pass hands each node its final box. A part plays exactly one geometric role:
+### Parts
 
-- **`size(props, m) → Vec`** — a *leaf*'s intrinsic size, independent of available room. `m.text(s)` measures text runs. This is the 80% case: buttons, labels, knobs. Builder sugar `intrinsic(w, h)` covers the constant case.
-- **`measure(props, avail, m) → Vec`** — a *container*'s desired size given at most `avail` room (an axis may be `Infinity`: "size to your content"). The part chooses each child's constraint and asks for its size through `m.children(avail)` / `m.child(i, avail)` (memoized per pass). Only needed when size depends on offered room — wrap, fill, aspect ratio. The builder's `fill()` is the one-liner for "take everything I'm offered."
-- **`arrange(props, rect, kids) → Rect[]`** — place children inside the final rect (which may be larger than requested), returning one absolute rect per child; each `kid.size` is the desired size from the measure phase. The one rule: arrange children at the extent you measured them with. The builder's `pack(fn)` derives *both* phases from a single packing function, making that rule unbreakable.
-- **`body(props, children) → Element[]`** — a *composite*: derive child elements from props (parts made of parts). Runs on the state clock, never per frame — structure is a function of state; motion stays in channels. The use-site `children` arrive as an argument so the composite can place its content slot. A part with `body` leaves geometry to the parts it expands into.
+A part is a widget definition: a named bundle of small declarations called **facets**. Each facet answers one question, and all of them are optional — you write only what a given widget needs. A label needs two facets; a node-editor wire might need five.
 
-Defaults for all of these exist: no `size`/`measure` means "union of my children"; no `arrange` means "children at my origin, at their desired size." A pure layout container typically declares only `measure` + `arrange` and nothing below.
+You define a part by chaining facets onto `part(name)`:
 
-**Appearance — what do I look like right now?** Split in two so *deciding* values and *painting* them never mix:
+```ts
+const Chip = part("chip")
+  .props<ChipProps>()          // what the use site must pass
+  .defaults({ w: 60 })         // fill in optional props, so facets never see undefined
+  .size((p, m) => ...)         // how big am I?
+  .style((t, ch) => ({ ... })) // what do I look like right now?
+  .render((n, paint, s) => ...)// paint it
+  .press((n) => ...)           // what does a click mean?
+```
 
-- **`style(tokens, ch, props) → S`** — resolve a flat record of visual values from theme tokens blended by channel values (`t.mix(t.surface, t.accent, ch.hover)`). This is the only place a part may touch tokens (enforced by `npm run check`), which is what makes every part restylable and theme-crossfadable from outside.
-- **`render(node, painter, style) → void`** — paint, reading only `node.rect` and the resolved style record. No decisions here; if render wants a token, that value belongs in `style`.
+The chain is more than sugar: each step is a typed inference boundary, every prefix is already a usable part, and the type system enforces the rules below (a part can't be both a leaf and a container; `style` must come before `render`). A plain object form of `part()` exists too, and `extendPart(name, base)` re-opens any part with the same vocabulary.
 
-**Behavior — what does input mean here?**
+The facets fall into four groups.
 
-- **`on: Interactor[]`** — input as *values*, not handlers: `Press`, `Drag1D`, `Gesture` (private state + query + overlay preview), `Keys`, `Pan`, `Focusable`, `Hover`. Interactors emit app intents and set tags; they never touch the doc or the scene. The builder's `press`/`drag1d`/`gesture`/`keys` sugar declares them with props already typed.
-- **`hit(node, p) → boolean`** — custom hit test when the rect is wrong (distance-to-curve for wires, enlarged grab zones). Default: the rect.
+**Geometry — how big am I, where do my children go?** A part plays exactly one of three geometric roles:
+
+- A **leaf** declares `size(props, m) → Vec` — its intrinsic size, e.g. "wide enough for my label" (`m.text` measures text). This is the 80% case: buttons, labels, knobs.
+- A **container** declares `measure` (how big do I want to be, given at most this much room?) and `arrange` (given my final rect, where does each child go?). `fill()` is the shortcut for "take all the room I'm offered", and `pack(fn)` derives both phases from a single packing function so they can't disagree.
+- A **composite** declares `body(props, children) → Element[]` — a part made of other parts. It expands into child elements and leaves geometry to them.
+
+Every geometry facet has a sensible default (no size means "union of my children"; no arrange means "children at my origin"), so the simplest parts skip this group entirely.
+
+**Appearance — what do I look like, and how does it get painted?** Two facets, split so that *deciding* values and *painting* them never mix:
+
+- `style(tokens, channels, props)` returns a flat record of resolved visual values — colors, offsets, radii — computed from theme tokens blended by channel values: `tokens.mix(t.surface, t.accent, ch.hover)`. This is the **only** place a part may touch the theme (`npm run check` enforces it), which is exactly what makes every part restylable from outside.
+- `render(node, painter, style)` paints, reading only the node's rect and the style record. No decisions here — if render wants a token, that value belongs in `style`.
+
+**Behavior — what does input mean here?** Input attaches as a list of **interactors** — values like `Press`, `Drag1D`, `Keys`, `Gesture` — each parameterized by *what intent to emit*. Interactors never touch your state or the scene; they translate gestures into intents, and the framework owns hit-testing, capture, and click-vs-drag disambiguation. The builder's `.press()` / `.drag1d()` / `.keys()` / `.gesture()` are shorthands for the common ones. A `hit` facet overrides hit-testing when the rectangle is wrong (wires, enlarged grab zones).
 
 **Garnish — what rides along?**
 
-- **`channels: Record<name, ChannelSpec>`** — extra animated values beyond the automatic `hover`/`press`/`drag`/`focus`/`enter`/`exit`: a `target` chased by a `spring` (overshoot) or `rate` (ease), or a `decay` impulse kicked by `node.kick(name)`. Namespace custom ones (`"fx/sheen"`).
-- **`anchors(node) → {id, pos}[]`** — publish named world-space points (sockets, ports) each layout pass; wires, magnetic snapping, and effects resolve geometry through the anchor registry instead of reaching into other parts.
-- **`adorn(node) → Element[]`** — overlay elements anchored to this host: tooltips, badges, resize grips, close buttons. Runs every frame, so it may read channels to appear and disappear (keyed, so enter/exit plays); results render above all content and may carry their own interactors. `addAdorn(...)` layers one onto any part that never planned for it.
+- `channels` declares extra animated values beyond the built-in ones (see below).
+- `anchors` publishes named points in world space — sockets, ports — that wires and snapping resolve through a registry instead of reaching into other parts.
+- `adorn` attaches overlay elements to a host: tooltips, badges, resize grips. They render above everything, can carry their own interactors, and can be layered onto a part that never planned for them.
 
-One prop-side note: `defaults` (set via the builder's `.defaults({...})`) merges under use-site props at element creation, so every facet above reads complete props — `p.gap`, never `p.gap ?? 8`.
+### Channels
+
+Channels are the animation substrate: named numbers on each widget that continuously chase targets. `hover`, `press`, `focus`, `drag`, `enter`, and `exit` come free on every part; a `channels` facet adds custom ones, chased by a spring (momentum, overshoot), an ease rate, or a decaying impulse.
+
+The key move is that *there is no animation API*. You never start, stop, or sequence a tween. A style function computes values from channels; when state changes move a channel's target, everything computed from it glides to the new value. Motion is a side effect of describing where things should be.
+
+### Extensions
+
+An extension is a function from part to part. Function facets extend by *wrapping* — `mapStyle` and `mapRender` hand you the original result and you state your delta. List facets extend by *appending* — `addOn` and `addChannels` add entries, replacing nothing. The same extension value applies at three scopes: baked into a new part (`derivePart`), across a whole theme (`extendTheme`), or on a single element (`withExt`). Nothing is ever edited in place. (This is the subject of [Why Gratify? §3](#3-wrap-dont-edit).)
+
+### How it runs
+
+The runtime separates *what the UI is* from *where it's heading*:
+
+1. When an intent arrives, `update` produces a new `Doc` and `view` re-derives the element tree. The tree is reconciled by key against the retained scene. This happens at human interaction rates — a click, a keypress — never per frame.
+2. Every animation frame, the runtime lays out (positions reflow through springs), steps each channel toward its target, resolves `style`, and paints the canvas.
+3. When every channel has settled, the runtime stops scheduling animation frames until the next input or intent wakes it.
+
+So the expensive, structural work happens rarely, and the per-frame work is just numbers chasing targets plus a paint pass. Deterministic stepping (`step(n, dt)`) drives the same loop headlessly for tests and golden images.
 
 ---
 
@@ -200,7 +261,7 @@ Gratify grew up building a node editor, so the hard problems most frameworks pun
 ### 7. Small, fast, honest
 
 - **Canvas-rendered.** No DOM diffing, no layout thrash, no CSS engine between you and the pixels.
-- **Two clocks.** State changes rebuild a cheap description (a few times a second at most); every frame just steps numbers toward targets and paints. The loop **sleeps entirely** when the scene is at rest — an idle UI costs zero CPU.
+- **Cheap by construction.** State changes rebuild a cheap description at human interaction rates; every frame just steps numbers toward targets and paints. When the scene settles, the loop **stops scheduling animation frames** until input arrives.
 - **A kernel you can read.** The core — reconcile, springs, channels, the loop — is a few hundred lines. There is no magic to be surprised by at 2 a.m.
 - **Deterministic stepping** built in (`step(n, dt)`) for headless testing and golden images.
 
@@ -220,21 +281,6 @@ Gratify grew up building a node editor, so the hard problems most frameworks pun
 | Theming | context + CSS vars | ResourceDictionary swap | `setTheme` — cross-fades free |
 
 The through-line: where React and WPF grew a *separate subsystem* per row, Gratify answers nearly every row with the same two mechanisms. That's what "composable" means here — not a feature for everything, but a few primitives that combine to cover the table.
-
----
-
-## Getting started
-
-```bash
-npm install
-npm run dev      # http://localhost:5199 — the examples gallery
-npm run test     # headless kernel tests (deterministic step())
-npm run check    # boundary check + typecheck
-```
-
-Every idea above has a running example. Rather than list them here, browse the **[live gallery ▶](https://ara3d.github.io/gratify/)** (or run `npm run dev`) — from the hello-world counter through a full pan/zoom node editor and a 15-control widget board. Each page shows its own source next to the running app, so you can read exactly the code that produced what you're looking at.
-
-- **Plan** — the roadmap and design record: [`docs/plan.md`](docs/plan.md)
 
 ---
 
@@ -284,7 +330,7 @@ If you're driving an agent (Cursor, Claude Code, …) to write Gratify code, poi
 - **Import from the `"gratify"` barrel only** — never reach into `src/gratify/*` from an app.
 - **Keep `update` pure and put state in the Doc.** The UI is `view(doc)`; intents are the only way to change anything.
 - **Customize by wrapping or appending, never by editing a part in place** — `mapStyle` / `mapRender` for looks, `addChannels` / `addOn` for behavior.
-- **Copy the nearest [`examples/`](examples/) file** rather than inventing APIs. Adornments, modal popups, instance-local state, and text input are *not built yet* — don't fake them.
+- **Copy the nearest [`examples/`](examples/) file** rather than inventing APIs. Modal popups, instance-local state, and text input are *not built yet* — don't fake them.
 
 **Status:** the kernel (two-clock loop, keyed reconcile, springs, channels,
 render-on-demand sleep), the `part()` facet model, layout with animated reflow,

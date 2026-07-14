@@ -1,15 +1,50 @@
 {
   "name": "gratify",
-  "version": "0.0.1",
-  "description": "A TypeScript UI framework where everything that changes, animates — and everything you build, composes.",
+  "version": "0.0.2",
+  "description": "A Typescript canvas-rendered UI framework for satisfying micro-interactions.",
   "type": "module",
-  "main": "src/gratify/index.ts",
+  "license": "MIT",
+  "author": "Ara 3D",
+  "homepage": "https://github.com/ara3d/gratify#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ara3d/gratify.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ara3d/gratify/issues"
+  },
+  "keywords": [
+    "ui",
+    "framework",
+    "typescript",
+    "animation",
+    "canvas",
+    "composable",
+    "reactive"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
   "scripts": {
     "dev": "vite",
     "build": "node scripts/check-boundary.mjs && tsc --noEmit && node scripts/clean-docs.mjs && vite build",
+    "build:lib": "node scripts/check-boundary.mjs && node scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
     "preview": "vite preview",
     "check": "node scripts/check-boundary.mjs && tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run check && npm run test && npm run build:lib"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
