@@ -1,4 +1,4 @@
-import{p as M,v as i,e as E,i as L,c as m,r as c,d as T,h as R,m as D,a as P}from"./source-panel-D2qVZYc0.js";const C=`// ============================================================================
+import{p as M,v as i,e as E,i as L,c as m,r as c,d as T,h as R,m as D,a as P}from"./source-panel-CCgHUfrE.js";const C=`// ============================================================================
 // Example: magnify — a bouncing lens that magnifies whatever is under it.
 //
 // A circular lens drifts around the canvas on its own (a Lissajous bounce, a

@@ -200,6 +200,8 @@ Every example page shows its own source next to the running app, so you can read
   - `combo-button` — click fast: heat, shake, glow, and particles build with your click rate
   - `magnify` — a bouncing lens fisheye-magnifies the tiles beneath it
   - `earthquake` — click to shake a brick skyline; a fully time-based animation
+  - `widget-board` — 15 Kea-style creative-tool controls (sliders, ranges, angles,
+    arcs, XY/box/cube, color wheel, gradient) on a pannable canvas
 
 **Status:** the kernel (two-clock loop, keyed reconcile, springs, channels,
 render-on-demand sleep), the `part()` facet model, layout with animated reflow,

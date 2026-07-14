@@ -27,6 +27,7 @@ export default defineConfig({
         "combo-button": resolve(__dirname, "examples/combo-button/index.html"),
         magnify: resolve(__dirname, "examples/magnify/index.html"),
         earthquake: resolve(__dirname, "examples/earthquake/index.html"),
+        "widget-board": resolve(__dirname, "examples/widget-board/index.html"),
       },
     },
   },
