@@ -7,8 +7,9 @@
 //     gap. Nobody wrote that animation: rows are keyed by a stable id, so the
 //     runtime keeps each row's springs alive across state changes, and layout
 //     changes simply give those springs new targets.
-//   • Checking a row off flips a `done` state tag. The tag automatically
-//     becomes an animated channel, so the label's dimming cross-fades.
+//   • Checking a row off springs the checkbox's `on` channel; the label
+//     (part of the checkbox, so clicking the text toggles too) cross-fades
+//     its dimming from the same channel.
 //
 // The one rule that buys all of this: KEY LIST ROWS BY A STABLE ID.
 // ============================================================================
@@ -78,29 +79,23 @@ function update(document: TodoDocument, intent: TodoIntent): TodoDocument {
 }
 
 // ── View: Doc → Element tree ──────────────────────────────────────────────────
-//
-// Note the `states: { done: item.done }` on each row: state tags are open-
-// ended labels projected FROM the model BY the view. Each one automatically
-// gets an animated channel, which the Label widget reads to dim itself.
 
 function view(document: TodoDocument) {
   return Stack("root", { gap: 10, pad: 48 }, [
 
     Label("title", { text: "Todos", size: 20, weight: 600, bright: true }),
 
-    // One Row per todo, keyed by the item's stable id.
+    // One Row per todo, keyed by the item's stable id. The text lives INSIDE
+    // the checkbox (its `label` prop), so box and words are one hit target —
+    // clicking the text toggles too, and the label's dimming cross-fades
+    // through the checkbox's `on` channel.
     ...document.todos.map((item) =>
-      Row(item.id, { gap: 10, states: { done: item.done } }, [
+      Row(item.id, { gap: 10 }, [
 
         Checkbox("check", {
           on: item.done,
+          label: item.text,
           toggle: { kind: "toggle-done", id: item.id },
-        }),
-
-        Label("text", {
-          text: item.text,
-          dim: item.done,
-          states: { done: item.done },
         }),
 
         CloseButton("delete", {

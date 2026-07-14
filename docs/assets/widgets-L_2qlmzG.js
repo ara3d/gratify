@@ -3,7 +3,8 @@ const n=`// Shared example widgets — each one is a single part() definition (R
 // (or a future widget library) ship widgets.
 
 import {
-  calpha, Drag1D, Element, GNode, Intentish, Label, part, Press, rect, Row, Stack, surface, v,
+  addOn, calpha, Drag1D, Element, GNode, Intentish, Label, part, Press, rect, Row, Stack,
+  surface, v, withExt,
 } from "gratify";
 
 // ---- Button -----------------------------------------------------------------
@@ -33,27 +34,37 @@ export const Button = part<ButtonProps>()("button", {
 });
 
 // ---- Checkbox -----------------------------------------------------------------
-export interface CheckboxProps { on: boolean; toggle: Intentish; }
+// With \`label\`, the text is part of the SAME part — so the whole box-plus-text
+// run is one hit target and clicking the words toggles too (the HTML <label>
+// courtesy). The label dims through the \`on\` channel, so checking off
+// cross-fades it for free.
+export interface CheckboxProps { on: boolean; toggle: Intentish; label?: string; }
 
 export const Checkbox = part<CheckboxProps>()("checkbox", {
-  size: () => v(20, 20),
+  size: (props, m) => (props.label ? v(28 + m.text(props.label, 12).x, 20) : v(20, 20)),
   channels: {
     on: { target: (n: GNode<CheckboxProps>) => (n.props.on ? 1 : 0), spring: { stiffness: 340, damping: 22 } },
   },
-  style: (t, ch) => ({
-    fill: t.mix(t.surface, t.accent, Math.min(1, Math.max(0, ch.on)) * 0.9),
-    edge: t.mix(t.muted, t.accent, Math.max(ch.on, ch.hover * 0.6)),
-    mark: calpha(t.textBright, Math.min(1, Math.max(0, ch.on))),
-    pop: ch.on,
-  }),
+  style: (t, ch) => {
+    const on = Math.min(1, Math.max(0, ch.on));
+    return {
+      fill: t.mix(t.surface, t.accent, on * 0.9),
+      edge: t.mix(t.muted, t.accent, Math.max(on, ch.hover * 0.6)),
+      mark: calpha(t.textBright, on),
+      text: t.mix(t.mix(t.text, t.textBright, 0.3 * ch.hover), t.textDim, on),
+      pop: ch.on,
+    };
+  },
   render(node, p, s) {
-    const r = node.rect.inset(1);
-    p.box(r, 6, s.fill, s.edge, 1.5);
-    const c = r.center, k = Math.min(1.15, Math.max(0, s.pop));
+    const r = node.rect;
+    const box = rect(r.x + 1, r.y + 1, 18, 18);
+    p.box(box, 6, s.fill, s.edge, 1.5);
+    const c = box.center, k = Math.min(1.15, Math.max(0, s.pop));
     if (k > 0.02) {
       p.line(v(c.x - 4 * k, c.y), v(c.x - 1 * k, c.y + 3 * k), s.mark, 2);
       p.line(v(c.x - 1 * k, c.y + 3 * k), v(c.x + 4.5 * k, c.y - 3.5 * k), s.mark, 2);
     }
+    if (node.props.label) p.label(node.props.label, v(r.x + 28, r.center.y), s.text, { align: "left", size: 12 });
   },
   on: [Press((node) => node.props.toggle)],
 });
@@ -159,6 +170,13 @@ export const Card = part<CardProps>()("card", {
 // When you only need a private arrangement, a function suffices — no named part,
 // no theme seam. Reach for \`Card\` (a part) when you want the arrangement to be
 // named, themable, and reachable by \`extendTheme("dark", "card", …)\`.
-export const Labeled = (key: string, text: string, el: Element): Element =>
-  Row(key, { gap: 8, align: "center" }, [Label(\`\${key}/l\`, { text, dim: true, size: 11 }), el]);
+// Pass \`press\` to make the caption clickable (toggle rows: clicking the words
+// should act like clicking the widget) — a one-line use-site extension.
+export const Labeled = (key: string, text: string, el: Element, press?: Intentish): Element =>
+  Row(key, { gap: 8, align: "center" }, [
+    press === undefined
+      ? Label(\`\${key}/l\`, { text, dim: true, size: 11 })
+      : withExt(Label(\`\${key}/l\`, { text, dim: true, size: 11 }), addOn(Press(() => press))),
+    el,
+  ]);
 `;export{n as w};

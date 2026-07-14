@@ -16,13 +16,16 @@
 import {
   addOn,                    // extension helper: append interactors to a part
   burst,                    // stock particle effect
+  calpha,
   Element,
+  mapRender,                // extension helper: wrap a part's render
   mount,
   PartExt,                  // the extension type: PartDef → PartDef
   Press,
   setTheme, themeName,      // live theme switching
   tokens,
   Stack, Row, Label,
+  v,
   withExt,                  // apply an extension to ONE element (use site)
 } from "gratify";
 import { Slider, Toggle, Checkbox } from "../shared/widgets";
@@ -43,6 +46,20 @@ const sparks: PartExt = addOn(
     return null;
   }),
 );
+
+// `gridBackdrop` wraps the root's render: a dot grid drawn UNDER the content.
+// The root carries `states: { grid }`, and a state tag automatically becomes an
+// animated channel — so flipping "Grid" cross-fades the dots in and out.
+const gridBackdrop: PartExt = mapRender((node, paint, _style, base) => {
+  const amount = node.ch.grid ?? 0;
+  if (amount > 0.01) {
+    const G = 28, r = node.rect;
+    const dot = calpha(tokens.muted, 0.35 * Math.min(1, amount));
+    for (let x = r.x + G / 2; x < r.right; x += G)
+      for (let y = r.y + G / 2; y < r.bottom; y += G) paint.dot(v(x, y), 1, dot);
+  }
+  base();
+});
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -90,10 +107,13 @@ function update(document: SettingsDocument, intent: SettingsIntent): SettingsDoc
 
 // ── View ──────────────────────────────────────────────────────────────────────
 
-/** A labeled settings row: caption on the left, widget on the right. */
-function settingsRow(key: string, caption: string, widget: Element): Element {
+/** A labeled settings row: caption on the left, widget on the right. Pass
+ *  `press` to make the caption clickable (clicking "Grid" should toggle Grid) —
+ *  the same use-site extension mechanism this example demonstrates. */
+function settingsRow(key: string, caption: string, widget: Element, press?: unknown): Element {
+  const caption_ = Label(`${key}/caption`, { text: caption, dim: true });
   return Row(key, { gap: 14 }, [
-    Label(`${key}/caption`, { text: caption, dim: true }),
+    press === undefined ? caption_ : withExt(caption_, addOn(Press(() => press))),
     widget,
   ]);
 }
@@ -105,12 +125,15 @@ function view(document: SettingsDocument) {
   const withSparks = (element: Element): Element =>
     document.options.sparks ? withExt(element, sparks) : element;
 
-  return Stack("root", { gap: 14, pad: 48 }, [
+  // The root carries the grid state tag and the backdrop extension: flipping
+  // "Grid" eases `ch.grid`, and the wrapped render fades the dots.
+  return withExt(Stack("root", { gap: 14, pad: 48, states: { grid: document.options.grid } }, [
 
     Label("title", { text: "Widgets", size: 20, weight: 600, bright: true }),
 
     settingsRow("power", "Power",
-      withSparks(Toggle("widget", { on: document.power, flip: { kind: "toggle-power" } }))),
+      withSparks(Toggle("widget", { on: document.power, flip: { kind: "toggle-power" } })),
+      { kind: "toggle-power" }),
 
     settingsRow("volume", "Volume",
       Slider("widget", { value: document.volume, set: (value) => ({ kind: "set-volume", value }) })),
@@ -119,19 +142,22 @@ function view(document: SettingsDocument) {
       Slider("widget", { value: document.glow, set: (value) => ({ kind: "set-glow", value }) })),
 
     settingsRow("sparks", "Sparks",
-      withSparks(Checkbox("widget", { on: document.options.sparks, toggle: { kind: "toggle-option", which: "sparks" } }))),
+      withSparks(Checkbox("widget", { on: document.options.sparks, toggle: { kind: "toggle-option", which: "sparks" } })),
+      { kind: "toggle-option", which: "sparks" }),
 
     settingsRow("grid", "Grid",
-      withSparks(Checkbox("widget", { on: document.options.grid, toggle: { kind: "toggle-option", which: "grid" } }))),
+      withSparks(Checkbox("widget", { on: document.options.grid, toggle: { kind: "toggle-option", which: "grid" } })),
+      { kind: "toggle-option", which: "grid" }),
 
     settingsRow("theme", "Light theme",
-      withSparks(Toggle("widget", { on: document.lightTheme, flip: { kind: "toggle-theme" } }))),
+      withSparks(Toggle("widget", { on: document.lightTheme, flip: { kind: "toggle-theme" } })),
+      { kind: "toggle-theme" }),
 
     Label("hint", {
-      text: "Sparks = a press extension appended to stock widgets at their use site.",
+      text: "Sparks = a press extension appended to stock widgets · Grid = a render extension wrapped on the root.",
       dim: true,
     }),
-  ]);
+  ]), gridBackdrop);
 }
 
 // ── Mount ─────────────────────────────────────────────────────────────────────

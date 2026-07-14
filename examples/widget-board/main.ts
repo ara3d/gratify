@@ -11,7 +11,7 @@
 // `npm run check`).
 //
 // Everything sits on a pannable canvas (drag empty space to pan, wheel to
-// zoom). The controls: Slider · Range · Number scrub · Knob · Angle dial ·
+// zoom). The controls: Slider · Range · Number scrub · Bezier ramp · Angle dial ·
 // Angle range · XY pad · Box 2D · Box 3D · Color wheel · Gradient ramp ·
 // Toggle · Checkbox · Segmented · Vector 3.
 // ============================================================================
@@ -77,7 +77,7 @@ interface Doc {
   scalar: number;                                   // 0..1
   range: { min: number; max: number };              // 0..1
   scrub: number;                                    // unbounded
-  knob: number;                                     // 0..1
+  ease: { x1: number; y1: number; x2: number; y2: number };   // cubic-bezier handles, 0..1
   angle: number;                                    // degrees
   arc: { start: number; end: number };              // degrees
   xy: { x: number; y: number };                     // -1..1
@@ -95,7 +95,7 @@ type Intent =
   | { kind: "scalar"; value: number }
   | { kind: "range"; value: { min: number; max: number } }
   | { kind: "scrub"; value: number }
-  | { kind: "knob"; value: number }
+  | { kind: "ease"; value: Doc["ease"] }
   | { kind: "angle"; value: number }
   | { kind: "arc"; value: { start: number; end: number } }
   | { kind: "xy"; value: { x: number; y: number } }
@@ -113,7 +113,7 @@ function update(doc: Doc, intent: Intent): Doc {
     case "scalar": return { ...doc, scalar: intent.value };
     case "range": return { ...doc, range: intent.value };
     case "scrub": return { ...doc, scrub: intent.value };
-    case "knob": return { ...doc, knob: intent.value };
+    case "ease": return { ...doc, ease: intent.value };
     case "angle": return { ...doc, angle: intent.value };
     case "arc": return { ...doc, arc: intent.value };
     case "xy": return { ...doc, xy: intent.value };
@@ -193,26 +193,60 @@ const NumberScrubCtl = part<{ value: number }>()("w-scrub", {
   ],
 });
 
-// ── 4. Knob (rotary) — Gesture, vertical drag ─────────────────────────────────
+// ── 4. Bezier ramp (easing curve) — Gesture, nearest handle ───────────────────
+// A cubic-bezier from (0,0) to (1,1) with two draggable handles — the CSS
+// `cubic-bezier(x1, y1, x2, y2)` editor. Curve y is unclamped visually within
+// the square; handle coords clamp to 0..1.
 
-const KnobCtl = part<{ value: number }>()("w-knob", {
+type Ease = Doc["ease"];
+
+/** Point on the unit cubic bezier (P0 = 0,0 · P3 = 1,1) at parameter t. */
+function bezierAt(e: Ease, t: number): Vec {
+  const u = 1 - t, uu3 = 3 * u * u * t, tt3 = 3 * u * t * t, ttt = t * t * t;
+  return v(uu3 * e.x1 + tt3 * e.x2 + ttt, uu3 * e.y1 + tt3 * e.y2 + ttt);
+}
+
+const BezierRampCtl = part<Ease>()("w-bezier", {
   size: () => v(CW, CH),
   style: (t, ch) => ctrl(t, ch),
   render: (node, paint, s) => {
+    const e = node.props;
     const sq = squareIn(node.rect);
-    const c = sq.center, radius = sq.w / 2 - 6;
-    paint.ring(c, radius, s.muted, 3);
-    const a = (0.75 + node.props.value * 1.5) * Math.PI;   // 270° sweep from 135°
-    const tip = v(c.x + Math.cos(a) * radius, c.y + Math.sin(a) * radius);
-    paint.line(c, tip, s.accent, 3);
-    thumb(paint, tip, 5 + node.ch.hover * 2, s.glow, s.accent, s.thumb);
-    paint.dot(c, 3, s.dim);
+    const toScreen = (p: Vec) => v(sq.x + p.x * sq.w, sq.bottom - p.y * sq.h);   // y up
+    paint.box(sq, 6, s.well, s.muted, 1);
+    paint.line(v(sq.x, sq.bottom), v(sq.right, sq.y), calpha(s.muted, 0.6));     // linear reference
+    // the curve, sampled
+    let prev = toScreen(v(0, 0));
+    for (let i = 1; i <= 24; i++) {
+      const p = toScreen(bezierAt(e, i / 24));
+      paint.line(prev, p, s.accent, 2);
+      prev = p;
+    }
+    // handle stems + thumbs
+    const h1 = toScreen(v(e.x1, e.y1)), h2 = toScreen(v(e.x2, e.y2));
+    paint.line(toScreen(v(0, 0)), h1, calpha(s.dim, 0.8), 1);
+    paint.line(toScreen(v(1, 1)), h2, calpha(s.dim, 0.8), 1);
+    thumb(paint, h1, 5 + node.ch.hover, s.glow, s.accent, s.thumb);
+    thumb(paint, h2, 5 + node.ch.hover, s.glow, s.accent, s.thumb);
   },
   on: [
-    Gesture<{ value: number }, { start: number; startY: number }>({
-      begin: (node, pointer) => ({ start: node.props.value, startY: pointer.y }),
-      during: (state, _node, pointer) =>
-        ({ kind: "knob", value: clamp(state.start - (pointer.y - state.startY) * 0.006, 0, 1) }),
+    Gesture<Ease, { which: "1" | "2" }>({
+      begin(node, pointer) {
+        const sq = squareIn(node.rect);
+        const toScreen = (x: number, y: number) => v(sq.x + x * sq.w, sq.bottom - y * sq.h);
+        const e = node.props;
+        const d1 = vdist(pointer, toScreen(e.x1, e.y1)), d2 = vdist(pointer, toScreen(e.x2, e.y2));
+        return { which: d1 <= d2 ? "1" : "2" };
+      },
+      during(state, node, pointer) {
+        const sq = squareIn(node.rect);
+        const fx = clamp((pointer.x - sq.x) / sq.w, 0, 1);
+        const fy = clamp((sq.bottom - pointer.y) / sq.h, 0, 1);
+        const e = node.props;
+        const value: Ease = state.which === "1"
+          ? { ...e, x1: fx, y1: fy } : { ...e, x2: fx, y2: fy };
+        return { kind: "ease", value };
+      },
     }),
   ],
 });
@@ -592,7 +626,8 @@ function view(doc: Doc): Element {
     cell(0, "Slider", doc.scalar.toFixed(2), SliderCtl("c", { value: doc.scalar })),
     cell(1, "Range", `${doc.range.min.toFixed(2)}–${doc.range.max.toFixed(2)}`, RangeCtl("c", { min: doc.range.min, max: doc.range.max })),
     cell(2, "Number", doc.scrub.toFixed(1), NumberScrubCtl("c", { value: doc.scrub })),
-    cell(3, "Knob", `${Math.round(doc.knob * 100)}%`, KnobCtl("c", { value: doc.knob })),
+    cell(3, "Ease", `${doc.ease.x1.toFixed(2)},${doc.ease.y1.toFixed(2)},${doc.ease.x2.toFixed(2)},${doc.ease.y2.toFixed(2)}`,
+      BezierRampCtl("c", { ...doc.ease })),
     cell(4, "Angle", `${Math.round(doc.angle)}°`, AngleDialCtl("c", { angle: doc.angle })),
     cell(5, "Arc", `${Math.round(doc.arc.start)}°–${Math.round(doc.arc.end)}°`, AngleRangeCtl("c", { start: doc.arc.start, end: doc.arc.end })),
     cell(6, "Vector 2", `${doc.xy.x.toFixed(2)}, ${doc.xy.y.toFixed(2)}`, XYPadCtl("c", { x: doc.xy.x, y: doc.xy.y })),
@@ -617,7 +652,7 @@ mount(canvas, {
     scalar: 0.4,
     range: { min: 0.25, max: 0.75 },
     scrub: 42,
-    knob: 0.6,
+    ease: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 },   // ease-in-out
     angle: 45,
     arc: { start: 20, end: 200 },
     xy: { x: 0.35, y: 0.5 },

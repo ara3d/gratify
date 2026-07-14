@@ -1,4 +1,4 @@
-import{m as k,d as w,S as y,L as i,R as h,P as b}from"./source-panel-cwX9nwkb.js";import{g as v,w as u,b as f}from"./extend-D1DJsxuA.js";import{T as g,S as x,a as E,B as d}from"./widgets-DkU5qRHh.js";import{w as S}from"./widgets-deNE_SuD.js";const L=`// ============================================================================
+import{P as f,m as y,d as b,S as v,L as l,R as h}from"./source-panel-cwX9nwkb.js";import{h as k,T as g,S as x,b as E,w as c,B as p,c as w}from"./widgets-Bo9jPsTR.js";import{w as S}from"./widgets-L_2qlmzG.js";const L=`// ============================================================================
 // Example: global effects — ordinary controls, one effect over all of them.
 //
 // The controls here (Button, Toggle, Slider, Checkbox) are the STOCK shared
@@ -115,9 +115,12 @@ function view(doc: Doc): Element {
   const magOn = doc.magnify ? 1 : 0;
   const fx = (el: Element): Element => withExt(el, magnify(magOn), quake(doc.lastQuake));
 
-  const rowLabel = (key: string, text: string, control: Element): Element =>
+  // \`press\` makes the caption clickable (clicking "Power" flips Power).
+  const rowLabel = (key: string, text: string, control: Element, press?: Intent): Element =>
     Row(key, { gap: 16, align: "center" }, [
-      Label(\`\${key}/l\`, { text, dim: true, size: 12 }),
+      press === undefined
+        ? Label(\`\${key}/l\`, { text, dim: true, size: 12 })
+        : withExt(Label(\`\${key}/l\`, { text, dim: true, size: 12 }), addOn(Press(() => press))),
       fx(control),
     ]);
 
@@ -126,16 +129,16 @@ function view(doc: Doc): Element {
     Label("sub", { text: "Stock controls, written normally. Two effects wrapped over ALL of them — nothing was edited.", dim: true, size: 12 }),
 
     rowLabel("mag", "Magnify (hover the controls)",
-      Toggle("mag/t", { on: doc.magnify, flip: { kind: "magnify" } })),
+      Toggle("mag/t", { on: doc.magnify, flip: { kind: "magnify" } }), { kind: "magnify" }),
 
     Label("divider", { text: "— ordinary controls —", dim: true, size: 11 }),
 
     rowLabel("power", "Power",
-      Toggle("power/t", { on: doc.power, flip: { kind: "power" } })),
+      Toggle("power/t", { on: doc.power, flip: { kind: "power" } }), { kind: "power" }),
     rowLabel("volume", "Volume",
       Slider("volume/s", { value: doc.volume, set: (value) => ({ kind: "volume", value }) })),
     rowLabel("agree", "Agree",
-      Checkbox("agree/c", { on: doc.agree, toggle: { kind: "agree" } })),
+      Checkbox("agree/c", { on: doc.agree, toggle: { kind: "agree" } }), { kind: "agree" }),
 
     // Press a button → the whole panel quakes, then settles. The stock Button is
     // untouched; a \`triggersQuake\` behavior is appended at its use site.
@@ -168,4 +171,4 @@ attachSourcePanel([
   { name: "main.ts", code: mainSource },
   { name: "widgets.ts (shared)", code: widgetsSource },
 ]);
-`,T=6,A=e=>{let t=0;for(let n=0;n<e.length;n++)t=(t*31+e.charCodeAt(n))%1e3;return t},P=e=>f((t,n,r,a)=>{const s=t.time??0,o=T*Math.exp(-3.5*(s-e));if(o<.05){a();return}const l=A(t.key),c=Math.sin(s*40+l)*o,p=Math.cos(s*34+l*1.7)*o;n.push(),n.translate(c,p),a(),n.pop()}),Q=e=>f((t,n,r,a)=>{const s=t.pointer;if(!s||e<.02){a();return}const o=t.rect.center,l=Math.hypot(s.x-o.x,s.y-o.y),c=Math.max(0,1-l/150),p=1+.4*c*c*e;n.push(),n.scaleAt(o.x,o.y,p),a(),n.pop()}),m=v(b(e=>({kind:"quake",time:e.time??0})));function M(e,t){switch(t.kind){case"quake":return{...e,lastQuake:t.time};case"magnify":return{...e,magnify:!e.magnify};case"power":return{...e,power:!e.power};case"volume":return{...e,volume:t.value};case"agree":return{...e,agree:!e.agree};case"click":return{...e,clicks:e.clicks+1}}}function C(e){const t=e.magnify?1:0,n=a=>u(a,Q(t),P(e.lastQuake)),r=(a,s,o)=>h(a,{gap:16,align:"center"},[i(`${a}/l`,{text:s,dim:!0,size:12}),n(o)]);return y("root",{gap:16,pad:44},[i("title",{text:"Global effects",size:22,weight:700,bright:!0}),i("sub",{text:"Stock controls, written normally. Two effects wrapped over ALL of them — nothing was edited.",dim:!0,size:12}),r("mag","Magnify (hover the controls)",g("mag/t",{on:e.magnify,flip:{kind:"magnify"}})),i("divider",{text:"— ordinary controls —",dim:!0,size:11}),r("power","Power",g("power/t",{on:e.power,flip:{kind:"power"}})),r("volume","Volume",x("volume/s",{value:e.volume,set:a=>({kind:"volume",value:a})})),r("agree","Agree",E("agree/c",{on:e.agree,toggle:{kind:"agree"}})),h("buttons",{gap:12},[n(u(d("save",{label:"Save",accent:!0,press:{kind:"click"}}),m)),n(u(d("cancel",{label:"Cancel",press:{kind:"click"}}),m)),n(u(d("delete",{label:"Delete",danger:!0,press:{kind:"click"}}),m))]),i("hint",{text:`Press a button to shake the panel · toggle Magnify and move the mouse · clicks ${e.clicks}`,dim:!0,size:11})])}const B=document.getElementById("c");k(B,{init:{lastQuake:-999,magnify:!0,power:!0,volume:.6,agree:!1,clicks:0},update:M,view:C,ambient:(e,t)=>t-e.lastQuake<1.6});w([{name:"main.ts",code:L},{name:"widgets.ts (shared)",code:S}]);
+`,P=6,T=e=>{let n=0;for(let t=0;t<e.length;t++)n=(n*31+e.charCodeAt(t))%1e3;return n},A=e=>w((n,t,i,a)=>{const o=n.time??0,s=P*Math.exp(-3.5*(o-e));if(s<.05){a();return}const r=T(n.key),d=Math.sin(o*40+r)*s,u=Math.cos(o*34+r*1.7)*s;t.push(),t.translate(d,u),a(),t.pop()}),Q=e=>w((n,t,i,a)=>{const o=n.pointer;if(!o||e<.02){a();return}const s=n.rect.center,r=Math.hypot(o.x-s.x,o.y-s.y),d=Math.max(0,1-r/150),u=1+.4*d*d*e;t.push(),t.scaleAt(s.x,s.y,u),a(),t.pop()}),m=k(f(e=>({kind:"quake",time:e.time??0})));function M(e,n){switch(n.kind){case"quake":return{...e,lastQuake:n.time};case"magnify":return{...e,magnify:!e.magnify};case"power":return{...e,power:!e.power};case"volume":return{...e,volume:n.value};case"agree":return{...e,agree:!e.agree};case"click":return{...e,clicks:e.clicks+1}}}function C(e){const n=e.magnify?1:0,t=a=>c(a,Q(n),A(e.lastQuake)),i=(a,o,s,r)=>h(a,{gap:16,align:"center"},[r===void 0?l(`${a}/l`,{text:o,dim:!0,size:12}):c(l(`${a}/l`,{text:o,dim:!0,size:12}),k(f(()=>r))),t(s)]);return v("root",{gap:16,pad:44},[l("title",{text:"Global effects",size:22,weight:700,bright:!0}),l("sub",{text:"Stock controls, written normally. Two effects wrapped over ALL of them — nothing was edited.",dim:!0,size:12}),i("mag","Magnify (hover the controls)",g("mag/t",{on:e.magnify,flip:{kind:"magnify"}}),{kind:"magnify"}),l("divider",{text:"— ordinary controls —",dim:!0,size:11}),i("power","Power",g("power/t",{on:e.power,flip:{kind:"power"}}),{kind:"power"}),i("volume","Volume",x("volume/s",{value:e.volume,set:a=>({kind:"volume",value:a})})),i("agree","Agree",E("agree/c",{on:e.agree,toggle:{kind:"agree"}}),{kind:"agree"}),h("buttons",{gap:12},[t(c(p("save",{label:"Save",accent:!0,press:{kind:"click"}}),m)),t(c(p("cancel",{label:"Cancel",press:{kind:"click"}}),m)),t(c(p("delete",{label:"Delete",danger:!0,press:{kind:"click"}}),m))]),l("hint",{text:`Press a button to shake the panel · toggle Magnify and move the mouse · clicks ${e.clicks}`,dim:!0,size:11})])}const B=document.getElementById("c");y(B,{init:{lastQuake:-999,magnify:!0,power:!0,volume:.6,agree:!1,clicks:0},update:M,view:C,ambient:(e,n)=>n-e.lastQuake<1.6});b([{name:"main.ts",code:L},{name:"widgets.ts (shared)",code:S}]);

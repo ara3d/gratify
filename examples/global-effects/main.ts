@@ -115,9 +115,12 @@ function view(doc: Doc): Element {
   const magOn = doc.magnify ? 1 : 0;
   const fx = (el: Element): Element => withExt(el, magnify(magOn), quake(doc.lastQuake));
 
-  const rowLabel = (key: string, text: string, control: Element): Element =>
+  // `press` makes the caption clickable (clicking "Power" flips Power).
+  const rowLabel = (key: string, text: string, control: Element, press?: Intent): Element =>
     Row(key, { gap: 16, align: "center" }, [
-      Label(`${key}/l`, { text, dim: true, size: 12 }),
+      press === undefined
+        ? Label(`${key}/l`, { text, dim: true, size: 12 })
+        : withExt(Label(`${key}/l`, { text, dim: true, size: 12 }), addOn(Press(() => press))),
       fx(control),
     ]);
 
@@ -126,16 +129,16 @@ function view(doc: Doc): Element {
     Label("sub", { text: "Stock controls, written normally. Two effects wrapped over ALL of them — nothing was edited.", dim: true, size: 12 }),
 
     rowLabel("mag", "Magnify (hover the controls)",
-      Toggle("mag/t", { on: doc.magnify, flip: { kind: "magnify" } })),
+      Toggle("mag/t", { on: doc.magnify, flip: { kind: "magnify" } }), { kind: "magnify" }),
 
     Label("divider", { text: "— ordinary controls —", dim: true, size: 11 }),
 
     rowLabel("power", "Power",
-      Toggle("power/t", { on: doc.power, flip: { kind: "power" } })),
+      Toggle("power/t", { on: doc.power, flip: { kind: "power" } }), { kind: "power" }),
     rowLabel("volume", "Volume",
       Slider("volume/s", { value: doc.volume, set: (value) => ({ kind: "volume", value }) })),
     rowLabel("agree", "Agree",
-      Checkbox("agree/c", { on: doc.agree, toggle: { kind: "agree" } })),
+      Checkbox("agree/c", { on: doc.agree, toggle: { kind: "agree" } }), { kind: "agree" }),
 
     // Press a button → the whole panel quakes, then settles. The stock Button is
     // untouched; a `triggersQuake` behavior is appended at its use site.

@@ -164,8 +164,7 @@ function view(document: ExtensionsDocument) {
     // it was never written for — the SurfaceStyle protocol is what they share.
     Card("neon-card", { title: "Card", value: "surface" }, [
       Row("card-row", { gap: 10 }, [
-        Checkbox("cb", { on: document.neonActive, toggle: { kind: "toggle-neon" } }),
-        Label("cb-label", { text: "same protocol", dim: true }),
+        Checkbox("cb", { on: document.neonActive, label: "same protocol", toggle: { kind: "toggle-neon" } }),
       ]),
     ]),
 

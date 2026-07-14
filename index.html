@@ -7,14 +7,15 @@
   <style>
     :root { color-scheme: dark; }
     body { margin: 0; background: #12141a; color: #ced4e0; font: 15px "Segoe UI", system-ui, sans-serif; }
-    main { max-width: 640px; margin: 8vh auto; padding: 0 24px; }
+    main { max-width: 960px; margin: 8vh auto; padding: 0 24px; }
     h1 { font-weight: 600; letter-spacing: 0.5px; }
     h1 span { color: #40baff; }
     p.tag { color: #828a9c; margin-top: -8px; }
-    ul { list-style: none; padding: 0; }
-    li { margin: 10px 0; }
-    a { display: block; padding: 14px 18px; border-radius: 10px; background: #242834;
-        color: #ced4e0; text-decoration: none; border: 1px solid #363c4c; transition: all .15s; }
+    ul { list-style: none; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 700px) { ul { grid-template-columns: 1fr; } }
+    li { margin: 0; }
+    a { display: block; height: 100%; box-sizing: border-box; padding: 14px 18px; border-radius: 10px;
+        background: #242834; color: #ced4e0; text-decoration: none; border: 1px solid #363c4c; transition: all .15s; }
     a:hover { background: #343a4a; border-color: #40baff; transform: translateY(-1px); }
     a b { color: #f2f6fc; }
     a small { color: #828a9c; display: block; margin-top: 3px; }

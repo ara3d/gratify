@@ -1,4 +1,4 @@
-import{m as a,d as i,S as s,L as o,R as r}from"./source-panel-cwX9nwkb.js";import{a as m,b as l,B as c}from"./widgets-DkU5qRHh.js";import{w as h}from"./widgets-deNE_SuD.js";const u=`// ============================================================================
+import{m as d,d as i,S as a,L as s,R as r}from"./source-panel-cwX9nwkb.js";import{b as l,i as c,B as m}from"./widgets-Bo9jPsTR.js";import{w as h}from"./widgets-L_2qlmzG.js";const g=`// ============================================================================
 // Example: todo — keyed enter / exit / reflow.
 //
 // What to look for when you run it:
@@ -7,8 +7,9 @@ import{m as a,d as i,S as s,L as o,R as r}from"./source-panel-cwX9nwkb.js";impor
 //     gap. Nobody wrote that animation: rows are keyed by a stable id, so the
 //     runtime keeps each row's springs alive across state changes, and layout
 //     changes simply give those springs new targets.
-//   • Checking a row off flips a \`done\` state tag. The tag automatically
-//     becomes an animated channel, so the label's dimming cross-fades.
+//   • Checking a row off springs the checkbox's \`on\` channel; the label
+//     (part of the checkbox, so clicking the text toggles too) cross-fades
+//     its dimming from the same channel.
 //
 // The one rule that buys all of this: KEY LIST ROWS BY A STABLE ID.
 // ============================================================================
@@ -78,29 +79,23 @@ function update(document: TodoDocument, intent: TodoIntent): TodoDocument {
 }
 
 // ── View: Doc → Element tree ──────────────────────────────────────────────────
-//
-// Note the \`states: { done: item.done }\` on each row: state tags are open-
-// ended labels projected FROM the model BY the view. Each one automatically
-// gets an animated channel, which the Label widget reads to dim itself.
 
 function view(document: TodoDocument) {
   return Stack("root", { gap: 10, pad: 48 }, [
 
     Label("title", { text: "Todos", size: 20, weight: 600, bright: true }),
 
-    // One Row per todo, keyed by the item's stable id.
+    // One Row per todo, keyed by the item's stable id. The text lives INSIDE
+    // the checkbox (its \`label\` prop), so box and words are one hit target —
+    // clicking the text toggles too, and the label's dimming cross-fades
+    // through the checkbox's \`on\` channel.
     ...document.todos.map((item) =>
-      Row(item.id, { gap: 10, states: { done: item.done } }, [
+      Row(item.id, { gap: 10 }, [
 
         Checkbox("check", {
           on: item.done,
+          label: item.text,
           toggle: { kind: "toggle-done", id: item.id },
-        }),
-
-        Label("text", {
-          text: item.text,
-          dim: item.done,
-          states: { done: item.done },
         }),
 
         CloseButton("delete", {
@@ -138,4 +133,4 @@ attachSourcePanel([
   { name: "main.ts", code: mainSource },
   { name: "widgets.ts (shared)", code: widgetsSource },
 ]);
-`,d=["Feed the kea","Write the layering guide","Port the kernel","Spring all the things","Delete a monolith","Ship an example","Wrap, don't edit","Chase the target","Let siblings glide"];function g(n,e){switch(e.kind){case"add":{const t={id:`todo-${n.nextIdNumber}`,text:d[n.nextIdNumber%d.length],done:!1};return{nextIdNumber:n.nextIdNumber+1,todos:[...n.todos,t]}}case"toggle-done":return{...n,todos:n.todos.map(t=>t.id===e.id?{...t,done:!t.done}:t)};case"remove":return{...n,todos:n.todos.filter(t=>t.id!==e.id)}}}function p(n){return s("root",{gap:10,pad:48},[o("title",{text:"Todos",size:20,weight:600,bright:!0}),...n.todos.map(e=>r(e.id,{gap:10,states:{done:e.done}},[m("check",{on:e.done,toggle:{kind:"toggle-done",id:e.id}}),o("text",{text:e.text,dim:e.done,states:{done:e.done}}),l("delete",{press:{kind:"remove",id:e.id}})])),c("add-button",{label:"+ Add",press:{kind:"add"},accent:!0})])}const w=document.getElementById("c");a(w,{init:{todos:[{id:"todo-a",text:"Try hovering things",done:!1},{id:"todo-b",text:"Check one off",done:!0},{id:"todo-c",text:"Delete one — watch the glide",done:!1}],nextIdNumber:0},update:g,view:p});i([{name:"main.ts",code:u},{name:"widgets.ts (shared)",code:h}]);
+`,o=["Feed the kea","Write the layering guide","Port the kernel","Spring all the things","Delete a monolith","Ship an example","Wrap, don't edit","Chase the target","Let siblings glide"];function u(e,n){switch(n.kind){case"add":{const t={id:`todo-${e.nextIdNumber}`,text:o[e.nextIdNumber%o.length],done:!1};return{nextIdNumber:e.nextIdNumber+1,todos:[...e.todos,t]}}case"toggle-done":return{...e,todos:e.todos.map(t=>t.id===n.id?{...t,done:!t.done}:t)};case"remove":return{...e,todos:e.todos.filter(t=>t.id!==n.id)}}}function p(e){return a("root",{gap:10,pad:48},[s("title",{text:"Todos",size:20,weight:600,bright:!0}),...e.todos.map(n=>r(n.id,{gap:10},[l("check",{on:n.done,label:n.text,toggle:{kind:"toggle-done",id:n.id}}),c("delete",{press:{kind:"remove",id:n.id}})])),m("add-button",{label:"+ Add",press:{kind:"add"},accent:!0})])}const b=document.getElementById("c");d(b,{init:{todos:[{id:"todo-a",text:"Try hovering things",done:!1},{id:"todo-b",text:"Check one off",done:!0},{id:"todo-c",text:"Delete one — watch the glide",done:!1}],nextIdNumber:0},update:u,view:p});i([{name:"main.ts",code:g},{name:"widgets.ts (shared)",code:h}]);

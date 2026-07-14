@@ -99,7 +99,7 @@ function view(doc: Doc) {
     Card("settings", { title: "Settings", value: "card = rung 2" }, [
       // RUNG 1: a plain Labeled() function — private arrangement, no seam.
       Labeled("vol", "Volume", Slider("vol/s", { value: doc.volume, set: (value) => ({ kind: "set-volume", value }) })),
-      Labeled("agree", "Agree", Checkbox("agree/c", { on: doc.agreed, toggle: { kind: "agree" } })),
+      Labeled("agree", "Agree", Checkbox("agree/c", { on: doc.agreed, toggle: { kind: "agree" } }), { kind: "agree" }),
     ]),
 
     // SCOPE 3: a use-site mapBody injects an extra child into THIS card only.
