@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Gratify — GitHub social card (1280×640)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    position: relative;
+    background: #0B0F1D;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    color: #fff;
+  }
+  .dots {
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,0.05) 1.3px, transparent 1.4px);
+    background-size: 30px 30px;
+  }
+  .glow-warm {
+    position: absolute; width: 760px; height: 760px; left: -200px; top: -300px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,122,69,0.17), transparent 68%);
+  }
+  .glow-cool {
+    position: absolute; width: 860px; height: 860px; right: -280px; bottom: -420px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(91,124,255,0.13), transparent 68%);
+  }
+  .row {
+    position: absolute; left: 92px; top: 132px;
+    display: flex; align-items: center; gap: 62px;
+  }
+  .logo { width: 256px; height: 256px; }
+  h1 {
+    font-size: 112px; font-weight: 700;
+    letter-spacing: -3px; line-height: 1;
+  }
+  .tag {
+    margin-top: 16px;
+    font-size: 34px; font-weight: 600;
+    color: rgba(255,255,255,0.9);
+  }
+  .tag .grad {
+    background: linear-gradient(90deg, #FF6B4A, #FFC24B);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .desc {
+    margin-top: 18px;
+    font-size: 24px; line-height: 1.42;
+    color: rgba(255,255,255,0.55);
+    max-width: 780px;
+  }
+  .chips {
+    position: absolute; left: 92px; bottom: 66px;
+    display: flex; gap: 14px;
+  }
+  .chip {
+    font-family: Consolas, monospace;
+    font-size: 20px;
+    padding: 9px 21px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,224,178,0.9);
+  }
+  .repo {
+    position: absolute; right: 68px; bottom: 76px;
+    font-family: Consolas, monospace;
+    font-size: 22px;
+    color: rgba(255,255,255,0.45);
+  }
+</style>
+</head>
+<body>
+  <div class="glow-warm"></div>
+  <div class="glow-cool"></div>
+  <div class="dots"></div>
+
+  <div class="row">
+    <svg class="logo" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="tile" cx="35%" cy="26%" r="95%">
+          <stop offset="0%" stop-color="#1C2542"/>
+          <stop offset="100%" stop-color="#0B0F1D"/>
+        </radialGradient>
+        <linearGradient id="warm" gradientUnits="userSpaceOnUse" x1="60" y1="55" x2="200" y2="200">
+          <stop offset="0%" stop-color="#FF6B4A"/>
+          <stop offset="55%" stop-color="#FF9440"/>
+          <stop offset="100%" stop-color="#FFC24B"/>
+        </linearGradient>
+        <filter id="ambient" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur stdDeviation="26"/>
+        </filter>
+        <filter id="ballGlow" x="-120%" y="-120%" width="340%" height="340%">
+          <feGaussianBlur stdDeviation="7" result="b"/>
+          <feMerge>
+            <feMergeNode in="b"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <clipPath id="tileClip">
+          <rect x="4" y="4" width="232" height="232" rx="52"/>
+        </clipPath>
+      </defs>
+      <rect x="4" y="4" width="232" height="232" rx="52" fill="url(#tile)" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+      <circle cx="122" cy="116" r="70" fill="#FF7A45" opacity="0.16" filter="url(#ambient)" clip-path="url(#tileClip)"/>
+      <path d="M 165.3 78.7 A 64 64 0 1 0 165.3 169.3"
+            fill="none" stroke="url(#warm)" stroke-width="30" stroke-linecap="round"/>
+      <path d="M 184 124 L 132 124"
+            fill="none" stroke="url(#warm)" stroke-width="30" stroke-linecap="round"/>
+      <circle cx="89.2" cy="138.4" r="7.5" fill="#FFD9A8" opacity="0.3"/>
+      <circle cx="98.1" cy="150.0" r="13" fill="#FFF3E0" filter="url(#ballGlow)"/>
+    </svg>
+
+    <div class="text">
+      <h1>Gratify</h1>
+      <div class="tag">Because your UI should be <span class="grad">satisfying</span>.</div>
+      <div class="desc">A canvas-rendered TypeScript UI framework — every state change animates itself, and every widget composes.</div>
+    </div>
+  </div>
+
+  <div class="chips">
+    <div class="chip">part()</div>
+    <div class="chip">facets</div>
+    <div class="chip">channels</div>
+    <div class="chip">interactors</div>
+    <div class="chip">themes</div>
+  </div>
+
+  <div class="repo">github.com/ara3d/gratify</div>
+</body>
+</html>
