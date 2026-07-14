@@ -93,13 +93,31 @@ export interface PartDef<P, S = Record<string, unknown>> extends PartSpec<P, S> 
   ancestors?: string[];
 }
 
-export interface PartCtor<P> {
+export interface PartCtor<P, S = unknown> {
   (key: string, props: P, children?: Element[]): Element;
-  def: PartDef<P, unknown>;
+  def: PartDef<P, S>;
 }
 
-/** Define a part. Returns its element constructor: (key, props, children?) → Element. */
-export function part<P, S = Record<string, unknown>>(name: string, spec: PartSpec<P, S>): PartCtor<P> {
+/** Recover a part's style-record type from its constructor, without a nominal
+ *  interface: mapStyle<StyleOf<typeof Button>>((t, ch, p, base) => …). */
+export type StyleOf<C> = C extends PartCtor<any, infer S> ? S : never;
+
+// Curried form (the house form): state the props type once, and the style
+// record S is INFERRED from the style function's return value — including
+// inside interactor callbacks, which a single-call generic can't type. The
+// legacy explicit two-parameter form stays for callers that want it.
+export function part<P>(): <S>(name: string, spec: PartSpec<P, S>) => PartCtor<P, S>;
+export function part<P, S = Record<string, unknown>>(name: string, spec: PartSpec<P, S>): PartCtor<P, S>;
+export function part<P, S = Record<string, unknown>>(
+  name?: string, spec?: PartSpec<P, S>,
+): PartCtor<P, S> | (<S2>(name: string, spec: PartSpec<P, S2>) => PartCtor<P, S2>) {
+  return name === undefined
+    ? <S2>(n: string, s: PartSpec<P, S2>) => makePart<P, S2>(n, s)
+    : makePart<P, S>(name, spec!);
+}
+
+/** Build the element constructor for a part definition. */
+function makePart<P, S>(name: string, spec: PartSpec<P, S>): PartCtor<P, S> {
   const def: PartDef<P, S> = { ...spec, name };   // name last: spec may be a spread def
   const ctor = ((key: string, props: P, children?: Element[]): Element => ({
     key,
@@ -107,7 +125,7 @@ export function part<P, S = Record<string, unknown>>(name: string, spec: PartSpe
     props,
     children,
     states: (props as { states?: Record<string, boolean> } | undefined)?.states,
-  })) as PartCtor<P>;
-  ctor.def = def as unknown as PartDef<P, unknown>;
+  })) as PartCtor<P, S>;
+  ctor.def = def;
   return ctor;
 }
