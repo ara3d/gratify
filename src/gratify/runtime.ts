@@ -1,28 +1,28 @@
 // ============================================================================
-// Gratify runtime — the two-clock loop.
-//   clock 1 (state changed): rebuild Element tree via view(doc), keyed reconcile.
-//   clock 2 (every frame):   layout targets, step springs/channels, paint.
-// Render-on-demand: the loop sleeps when the scene is at rest, wakes on input
-// or dispatch. Deterministic step(n, dt) for headless tests; the whole input
-// pipeline (pointerDown/Move/Up, wheel, key) is public so tests drive it
-// without a DOM.
+// Gratify runtime — the two-clock loop and the input pipeline. The passes it
+// orchestrates live in their own modules: layout.ts (measure/place/springs),
+// animate.ts (channels), draw.ts (layered paint), effective.ts (layering
+// composition). This file owns state: doc, retained trees, viewport, pointer,
+// gesture, focus, anchors, wake/sleep.
 //
-// M3 editor tier: viewport (pan/zoom) with three layers (world/overlay/screen),
-// an anchor registry published by layout, gesture interactors with private
-// state + read-only Query + overlay preview views, keyboard focus, and
-// impulse channels (kick + decay).
+// The input pipeline (pointerDown/Move/Up, wheel, key) is public so headless
+// tests drive real interactions; step(n, dt) advances deterministic frames.
 //
 // HOST BOUNDARY (plan §0.1): this file imports no app/example module. The app
 // arrives as AppSpec { init, update, view } — nothing else crosses.
 // ============================================================================
 
-import { approach, clamp, easeOutBack, Rect, Spring, v, Vec } from "./core";
+import { clamp, v, Vec } from "./core";
 import { CanvasPainter, NullPainter, Painter } from "./painter";
-import { Element, Instance, reconcile } from "./scene";
-import { GNode, PartDef } from "./part";
-import { Anchor, axisFraction, GestureSpec, Interactor, Intentish, Query } from "./interact";
-import { activeThemeExts, themeVersion, tickTheme, tokens } from "./theme";
+import { Element, Instance, Layer, reconcile } from "./scene";
+import { GNode } from "./part";
+import { Anchor, axisFraction, GestureSpec, Interactor, Query } from "./interact";
+import { tickTheme } from "./theme";
 import { Fx } from "./fx";
+import { AnyDef, EffCache } from "./effective";
+import { layoutScene } from "./layout";
+import { animateScene } from "./animate";
+import { renderScene } from "./draw";
 
 export interface AppSpec<TDoc, TIntent> {
   init: TDoc;
@@ -36,8 +36,6 @@ export interface RuntimeOpts {
   height?: number;
 }
 
-type AnyDef = PartDef<unknown, unknown>;
-type Layer = "world" | "overlay" | "screen";
 type Mods = { shift: boolean; alt: boolean; ctrl: boolean };
 
 interface PressState {
@@ -53,9 +51,6 @@ interface ActiveGesture {
   state: unknown;
 }
 
-const POS_SPRING = { k: 240, d: 26 };
-const SIZE_RATE = 18;
-
 /** Internal container for gesture preview elements. */
 const GESTURE_ROOT: AnyDef = { name: "__gesture-root" };
 
@@ -67,11 +62,12 @@ export class Runtime<TDoc, TIntent> {
   time = 0;
   viewport = { pan: v(0, 0), zoom: 1 };
 
+  private effs = new EffCache();
   private dirty = false;
   private dpr = 1;
   private viewW: number; private viewH: number;
   private pointer: Vec | null = null;          // screen coords
-  private mods = { shift: false, alt: false, ctrl: false };
+  private mods: Mods = { shift: false, alt: false, ctrl: false };
   private press: PressState | null = null;
   private gesture: ActiveGesture | null = null;
   private gestureRoot: Instance | null = null;
@@ -88,18 +84,6 @@ export class Runtime<TDoc, TIntent> {
     this.doc = app.init;
     this.root = reconcile(null, app.view(this.doc));
     if (canvas && !opts.headless) this.attach(canvas);
-  }
-
-  // ---- effective part definitions (layering: definition → theme → use site) --
-  private effCache = new WeakMap<Instance, { ver: number; el: Element; def: AnyDef }>();
-  private eff(inst: Instance): AnyDef {
-    const hit = this.effCache.get(inst);
-    if (hit && hit.ver === themeVersion && hit.el === inst.el) return hit.def;
-    let def = inst.part as AnyDef;
-    for (const e of activeThemeExts(def.name, def.ancestors)) def = e(def) as AnyDef;
-    for (const e of inst.el.exts ?? []) def = (e as (d: AnyDef) => AnyDef)(def);
-    this.effCache.set(inst, { ver: themeVersion, el: inst.el, def });
-    return def;
   }
 
   // ---- public --------------------------------------------------------------
@@ -140,7 +124,7 @@ export class Runtime<TDoc, TIntent> {
     this.pointer = p;
     const hit = this.interactiveHit(this.root, p);
     if (hit) {
-      const eff = this.eff(hit);
+      const eff = this.effs.get(hit);
       const node = this.nodeOf(hit);
       const lp = this.layerPoint(this.layerOfInst(hit), p);
       // gestures get first crack; begin() may decline with null
@@ -198,7 +182,7 @@ export class Runtime<TDoc, TIntent> {
     }
     // a clean click (no movement) still runs press behaviors, gesture or not
     if (ps && !ps.drag && !ps.moved && this.hitTest(ps.inst, p)) {
-      for (const it of this.eff(ps.inst).on ?? []) {
+      for (const it of this.effs.get(ps.inst).on ?? []) {
         if (it.kind === "press") {
           const intent = it.to(this.nodeOf(ps.inst));
           if (intent != null) this.dispatch(intent as TIntent);
@@ -226,7 +210,7 @@ export class Runtime<TDoc, TIntent> {
     while (h) { chain.push(h); h = h.parent ?? null; }
     if (!chain.includes(this.root)) chain.push(this.root);
     for (const inst of chain) {
-      for (const it of this.eff(inst).on ?? []) {
+      for (const it of this.effs.get(inst).on ?? []) {
         if (it.kind === "keys" && it.map[k]) {
           const intent = it.map[k](this.nodeOf(inst));
           if (intent != null) this.dispatch(intent as TIntent);
@@ -237,7 +221,149 @@ export class Runtime<TDoc, TIntent> {
     }
   }
 
-  // ---- DOM wiring ----------------------------------------------------------
+  // ---- one frame -----------------------------------------------------------
+  tick(dt: number) {
+    this.time += dt;
+    const themeFading = tickTheme(dt);
+    if (this.dirty) { this.root = reconcile(this.root, this.app.view(this.doc)); this.dirty = false; }
+    const eff = (i: Instance) => this.effs.get(i);
+    layoutScene(this.root, dt, eff, this.painter.measure, this.viewW, this.viewH);
+    this.publishAnchors();
+    this.syncGestureView(dt, eff);
+    const env = {
+      eff,
+      nodeOf: (i: Instance) => this.nodeOf(i),
+      hovered: this.hoverInst(),
+      pressed: this.press?.inst ?? null,
+      dragging: this.gesture?.inst ?? null,
+      focused: this.focus,
+    };
+    animateScene(this.root, dt, env);
+    if (this.gestureRoot) animateScene(this.gestureRoot, dt, { ...env, hovered: null });
+    for (const f of this.fx) f.update(dt);
+    this.fx = this.fx.filter((f) => !f.done);
+    this.prune(this.root);
+    if (this.gestureRoot) this.prune(this.gestureRoot);
+    renderScene(this.painter, {
+      root: this.root, gestureRoot: this.gestureRoot, fx: this.fx,
+      viewport: this.viewport, dpr: this.dpr, viewW: this.viewW, viewH: this.viewH,
+    }, env);
+
+    const sig = this.signature(this.root) + (this.gestureRoot ? this.signature(this.gestureRoot) : 0);
+    this.moving = themeFading || this.fx.length > 0 || this.dirty || !!this.press || !!this.gesture ||
+      Math.abs(sig - this.lastSig) > 0.002;
+    this.lastSig = sig;
+  }
+
+  // ---- anchors: published by layout, read through Query (guide §5b) ----------
+  private publishAnchors() {
+    this.anchorMap.clear();
+    const rec = (inst: Instance) => {
+      const part = this.effs.get(inst);
+      if (part.anchors) {
+        for (const a of part.anchors(this.nodeOf(inst))) {
+          this.anchorMap.set(a.id, { ...a, key: inst.key });
+        }
+      }
+      for (const c of inst.children) rec(c);
+    };
+    rec(this.root);
+  }
+
+  // ---- gesture preview view (overlay elements while a gesture runs) ----------
+  private syncGestureView(dt: number, eff: (i: Instance) => AnyDef) {
+    const els = this.gesture?.spec.view?.(this.gesture.state, this.query) ?? [];
+    if (els.length || this.gestureRoot?.children.length || this.gestureRoot?.ghosts.length) {
+      const rootEl: Element = { key: "__gestures", part: GESTURE_ROOT, props: {}, children: els, layer: "overlay" };
+      this.gestureRoot = reconcile(this.gestureRoot, rootEl);
+      layoutScene(this.gestureRoot, dt, eff, this.painter.measure, this.viewW, this.viewH);
+    } else {
+      this.gestureRoot = null;
+    }
+  }
+
+  // ---- node capability record ------------------------------------------------
+  private nodeOf(inst: Instance): GNode<unknown> {
+    const lp = this.pointer ? this.layerPoint(this.layerOfInst(inst), this.pointer) : undefined;
+    return {
+      key: inst.key, props: inst.props, rect: inst.rect, ch: inst.ch, states: inst.states,
+      pointer: lp,
+      spawn: (f) => this.spawnFx(f as Fx),
+      anchor: (id) => this.anchorMap.get(id)?.pos,
+      kick: (k, val = 1) => { inst.ch[k] = val; this.wake(); },
+      view: { pan: this.viewport.pan, zoom: this.viewport.zoom, w: this.viewW, h: this.viewH },
+    };
+  }
+
+  // ---- hit-testing (layer-aware) -----------------------------------------------
+  private layerOfInst(inst: Instance): Layer {
+    let cur: Instance | undefined = inst;
+    while (cur) { if (cur.el.layer) return cur.el.layer; cur = cur.parent; }
+    return "world";
+  }
+
+  private layerPoint(layer: Layer, p: Vec): Vec {
+    return layer === "screen" ? p : this.toWorld(p);
+  }
+
+  private hoverInst(): Instance | null {
+    return this.pointer ? this.renderHit(this.root, this.pointer) : null;
+  }
+
+  private hitTest(inst: Instance, p: Vec): boolean {
+    const lp = this.layerPoint(this.layerOfInst(inst), p);
+    const part = this.effs.get(inst);
+    return part.hit ? part.hit(this.nodeOf(inst), lp) : inst.rect.contains(lp);
+  }
+
+  private renderHit(inst: Instance, p: Vec): Instance | null {
+    for (let i = inst.children.length - 1; i >= 0; i--) {
+      const hit = this.renderHit(inst.children[i], p);
+      if (hit) return hit;
+    }
+    const part = this.effs.get(inst);
+    if ((part.render || part.on?.length) && this.hitTest(inst, p)) return inst;
+    return null;
+  }
+
+  /** Nearest self-or-ancestor of the hit with interactors attached. */
+  private interactiveHit(root: Instance, p: Vec): Instance | null {
+    let cur: Instance | null | undefined = this.renderHit(root, p);
+    while (cur && !this.effs.get(cur).on?.length) cur = cur.parent;
+    return cur ?? null;
+  }
+
+  private anyPan(inst: Instance): boolean {
+    if (this.effs.get(inst).on?.some((i) => i.kind === "pan")) return true;
+    return inst.children.some((c) => this.anyPan(c));
+  }
+
+  private dispatchDrag(inst: Instance, drag: Extract<Interactor<unknown>, { kind: "drag1d" }>, p: Vec) {
+    const lp = this.layerPoint(this.layerOfInst(inst), p);
+    const f = axisFraction(inst.rect, drag.axis, drag.pad ?? 8, lp.x, lp.y);
+    const intent = drag.to(this.nodeOf(inst), f);
+    if (intent != null) this.dispatch(intent as TIntent);
+  }
+
+  // ---- ghost pruning + rest detection --------------------------------------------
+  private prune(inst: Instance) {
+    inst.ghosts = inst.ghosts.filter((g) => (g.ch.exit || 0) < 0.99);
+    for (const c of inst.children) this.prune(c);
+  }
+
+  private signature(inst: Instance): number {
+    let s = 0;
+    const rec = (i: Instance) => {
+      for (const k in i.ch) s += i.ch[k];
+      s += (i.sx.v + i.sy.v + i.cw + i.chh) * 0.01;
+      for (const c of i.children) rec(c);
+      for (const g of i.ghosts) rec(g);
+    };
+    rec(inst);
+    return s;
+  }
+
+  // ---- DOM wiring + wake/sleep -------------------------------------------------
   private attach(canvas: HTMLCanvasElement) {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     const resize = () => {
@@ -255,7 +381,7 @@ export class Runtime<TDoc, TIntent> {
       const b = canvas.getBoundingClientRect();
       return v(ev.clientX - b.left, ev.clientY - b.top);
     };
-    const m = (ev: PointerEvent) => ({ shift: ev.shiftKey, alt: ev.altKey, ctrl: ev.ctrlKey || ev.metaKey });
+    const m = (ev: PointerEvent): Mods => ({ shift: ev.shiftKey, alt: ev.altKey, ctrl: ev.ctrlKey || ev.metaKey });
     canvas.addEventListener("pointerdown", (ev) => { this.pointerDown(pos(ev), m(ev)); canvas.setPointerCapture(ev.pointerId); });
     canvas.addEventListener("pointermove", (ev) => this.pointerMove(pos(ev), m(ev)));
     canvas.addEventListener("pointerup", (ev) => this.pointerUp(pos(ev)));
@@ -271,13 +397,6 @@ export class Runtime<TDoc, TIntent> {
 
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
-  }
-
-  private dispatchDrag(inst: Instance, drag: Extract<Interactor<unknown>, { kind: "drag1d" }>, p: Vec) {
-    const lp = this.layerPoint(this.layerOfInst(inst), p);
-    const f = axisFraction(inst.rect, drag.axis, drag.pad ?? 8, lp.x, lp.y);
-    const intent = drag.to(this.nodeOf(inst), f);
-    if (intent != null) this.dispatch(intent as TIntent);
   }
 
   private wake() {
@@ -298,252 +417,6 @@ export class Runtime<TDoc, TIntent> {
     if (this.idleT > 0.4) { this.awake = false; return; }   // sleep until woken
     requestAnimationFrame((t) => this.frame(t));
   }
-
-  // ---- one frame -----------------------------------------------------------
-  tick(dt: number) {
-    this.time += dt;
-    const themeFading = tickTheme(dt);
-    if (this.dirty) { this.root = reconcile(this.root, this.app.view(this.doc)); this.dirty = false; }
-    this.layout(this.root, dt);
-    this.publishAnchors();
-    this.syncGestureView(dt);
-    this.animate(this.root, dt);
-    if (this.gestureRoot) this.animate(this.gestureRoot, dt, null);
-    for (const f of this.fx) f.update(dt);
-    this.fx = this.fx.filter((f) => !f.done);
-    this.prune(this.root);
-    if (this.gestureRoot) this.prune(this.gestureRoot);
-    this.render();
-
-    const sig = this.signature(this.root) + (this.gestureRoot ? this.signature(this.gestureRoot) : 0);
-    this.moving = themeFading || this.fx.length > 0 || this.dirty || !!this.press || !!this.gesture ||
-      Math.abs(sig - this.lastSig) > 0.002;
-    this.lastSig = sig;
-  }
-
-  // ---- layout: measure bottom-up, place top-down, springs glide -------------
-  private sizes = new Map<Instance, Vec>();
-
-  private measureInst(inst: Instance): Vec {
-    const part = this.eff(inst);
-    const kidSizes = inst.children.map((c) => this.measureInst(c));
-    let s: Vec;
-    if (part.size) s = part.size(inst.props, this.painter.measure);
-    else if (part.measure) s = part.measure(inst.props, kidSizes, this.painter.measure);
-    else s = kidSizes.reduce((m, k) => v(Math.max(m.x, k.x), Math.max(m.y, k.y)), v(0, 0));
-    this.sizes.set(inst, s);
-    return s;
-  }
-
-  private placeInst(inst: Instance, target: Rect) {
-    inst.target = target;
-    const part = this.eff(inst);
-    if (part.place && inst.children.length) {
-      const kids = inst.children.map((c) => ({ key: c.key, size: this.sizes.get(c)!, props: c.props }));
-      const rects = part.place(inst.props, target, kids);
-      inst.children.forEach((c, i) => this.placeInst(c, rects[i]));
-    } else {
-      for (const c of inst.children) this.placeInst(c, new Rect(target.x, target.y, this.sizes.get(c)?.x ?? 0, this.sizes.get(c)?.y ?? 0));
-    }
-  }
-
-  private stepRects(inst: Instance, dt: number) {
-    const t = inst.target;
-    if (!inst.placed) {
-      inst.sx.set(t.x); inst.sy.set(t.y); inst.cw = t.w; inst.chh = t.h;
-      inst.placed = true;
-    } else if (!inst.exiting) {
-      inst.sx.step(t.x, POS_SPRING.k, POS_SPRING.d, dt);
-      inst.sy.step(t.y, POS_SPRING.k, POS_SPRING.d, dt);
-      inst.cw = approach(inst.cw, t.w, SIZE_RATE, dt);
-      inst.chh = approach(inst.chh, t.h, SIZE_RATE, dt);
-    }
-    inst.rect = new Rect(inst.sx.v, inst.sy.v, inst.cw, inst.chh);
-    for (const c of inst.children) this.stepRects(c, dt);
-    for (const g of inst.ghosts) this.stepRects(g, dt);
-  }
-
-  private layout(root: Instance, dt: number) {
-    this.sizes.clear();
-    const s = this.measureInst(root);
-    this.placeInst(root, new Rect(0, 0, Math.max(s.x, this.viewW), Math.max(s.y, this.viewH)));
-    this.stepRects(root, dt);
-  }
-
-  // ---- anchors: published by layout, read through Query (guide §5b) ----------
-  private publishAnchors() {
-    this.anchorMap.clear();
-    const rec = (inst: Instance) => {
-      const part = this.eff(inst);
-      if (part.anchors) {
-        for (const a of part.anchors(this.nodeOf(inst))) {
-          this.anchorMap.set(a.id, { ...a, key: inst.key });
-        }
-      }
-      for (const c of inst.children) rec(c);
-    };
-    rec(this.root);
-  }
-
-  // ---- gesture preview view (overlay elements while a gesture runs) ----------
-  private syncGestureView(dt: number) {
-    const els = this.gesture?.spec.view?.(this.gesture.state, this.query) ?? [];
-    if (els.length || this.gestureRoot?.children.length || this.gestureRoot?.ghosts.length) {
-      const rootEl: Element = { key: "__gestures", part: GESTURE_ROOT, props: {}, children: els, layer: "overlay" };
-      this.gestureRoot = reconcile(this.gestureRoot, rootEl);
-      this.layout(this.gestureRoot, dt);
-    } else {
-      this.gestureRoot = null;
-    }
-  }
-
-  // ---- channels: targets re-derived every frame, values chase ---------------
-  private nodeOf(inst: Instance): GNode<unknown> {
-    const lp = this.pointer ? this.layerPoint(this.layerOfInst(inst), this.pointer) : undefined;
-    return {
-      key: inst.key, props: inst.props, rect: inst.rect, ch: inst.ch, states: inst.states,
-      pointer: lp,
-      spawn: (f) => this.spawnFx(f as Fx),
-      anchor: (id) => this.anchorMap.get(id)?.pos,
-      kick: (k, val = 1) => { inst.ch[k] = val; this.wake(); },
-      view: { pan: this.viewport.pan, zoom: this.viewport.zoom, w: this.viewW, h: this.viewH },
-    };
-  }
-
-  private layerOfInst(inst: Instance): Layer {
-    let cur: Instance | undefined = inst;
-    while (cur) { if (cur.el.layer) return cur.el.layer; cur = cur.parent; }
-    return "world";
-  }
-
-  private layerPoint(layer: Layer, p: Vec): Vec {
-    return layer === "screen" ? p : this.toWorld(p);
-  }
-
-  private hoverInst(): Instance | null {
-    return this.pointer ? this.renderHit(this.root, this.pointer) : null;
-  }
-
-  private hitTest(inst: Instance, p: Vec): boolean {
-    const lp = this.layerPoint(this.layerOfInst(inst), p);
-    const part = this.eff(inst);
-    return part.hit ? part.hit(this.nodeOf(inst), lp) : inst.rect.contains(lp);
-  }
-
-  private renderHit(inst: Instance, p: Vec): Instance | null {
-    for (let i = inst.children.length - 1; i >= 0; i--) {
-      const hit = this.renderHit(inst.children[i], p);
-      if (hit) return hit;
-    }
-    const part = this.eff(inst);
-    if ((part.render || part.on?.length) && this.hitTest(inst, p)) return inst;
-    return null;
-  }
-
-  /** Nearest self-or-ancestor of the hit with interactors attached. */
-  private interactiveHit(root: Instance, p: Vec): Instance | null {
-    let cur: Instance | null | undefined = this.renderHit(root, p);
-    while (cur && !this.eff(cur).on?.length) cur = cur.parent;
-    return cur ?? null;
-  }
-
-  private anyPan(inst: Instance): boolean {
-    if (this.eff(inst).on?.some((i) => i.kind === "pan")) return true;
-    return inst.children.some((c) => this.anyPan(c));
-  }
-
-  private animate(inst: Instance, dt: number, hovered?: Instance | null) {
-    if (hovered === undefined) hovered = this.hoverInst();
-
-    // automatic channels
-    if (!inst.exiting) inst.ch.enter = approach(inst.ch.enter, 1, 6, dt);
-    else inst.ch.exit = approach(inst.ch.exit || 0, 1, 7, dt);
-    inst.ch.hover = approach(inst.ch.hover || 0, inst === hovered ? 1 : 0, 16, dt);
-    inst.ch.press = approach(inst.ch.press || 0, this.press?.inst === inst ? 1 : 0, 22, dt);
-    inst.ch.drag = approach(inst.ch.drag || 0, this.gesture?.inst === inst ? 1 : 0, 14, dt);
-    inst.ch.focus = approach(inst.ch.focus || 0, this.focus === inst ? 1 : 0, 14, dt);
-
-    // state-tag channels (every tag ever seen keeps fading in/out)
-    for (const k of inst.stateKeys)
-      inst.ch[k] = approach(inst.ch[k] || 0, inst.states.has(k) ? 1 : 0, 10, dt);
-
-    // part-declared channels (incl. extension-appended ones)
-    const decls = this.eff(inst).channels;
-    if (decls) {
-      const node = this.nodeOf(inst);
-      for (const k in decls) {
-        const spec = decls[k];
-        if (spec.decay !== undefined) {
-          // impulse: kick() sets it, it fades to rest
-          inst.ch[k] = approach(inst.ch[k] || 0, 0, spec.decay, dt);
-          continue;
-        }
-        const target = spec.target ? spec.target(node) : 0;
-        if (!(k in inst.ch)) {
-          inst.ch[k] = target;                        // first frame: snap
-          if (spec.spring) inst.chSprings[k] = new Spring(target);
-        } else if (spec.spring) {
-          const sp = (inst.chSprings[k] ||= new Spring(inst.ch[k]));
-          inst.ch[k] = sp.step(target, spec.spring.stiffness, spec.spring.damping, dt);
-        } else {
-          inst.ch[k] = approach(inst.ch[k], target, spec.rate ?? 10, dt);
-        }
-      }
-    }
-
-    for (const c of inst.children) this.animate(c, dt, hovered);
-    for (const g of inst.ghosts) this.animate(g, dt, hovered);
-  }
-
-  private prune(inst: Instance) {
-    inst.ghosts = inst.ghosts.filter((g) => (g.ch.exit || 0) < 0.99);
-    for (const c of inst.children) this.prune(c);
-  }
-
-  private signature(inst: Instance): number {
-    let s = 0;
-    const rec = (i: Instance) => {
-      for (const k in i.ch) s += i.ch[k];
-      s += (i.sx.v + i.sy.v + i.cw + i.chh) * 0.01;
-      for (const c of i.children) rec(c);
-      for (const g of i.ghosts) rec(g);
-    };
-    rec(inst);
-    return s;
-  }
-
-  // ---- paint: world (transformed) → overlay (transformed, on top) → screen ----
-  private render() {
-    const p = this.painter;
-    p.clear(tokens.bg, this.viewW, this.viewH);
-    p.view(this.viewport.pan, this.viewport.zoom, this.dpr);
-    this.draw(this.root, p, "world", "world");
-    this.draw(this.root, p, "overlay", "world");
-    if (this.gestureRoot) this.draw(this.gestureRoot, p, "overlay", "overlay");
-    for (const f of this.fx) f.draw(p);
-    p.screen(this.dpr);
-    this.draw(this.root, p, "screen", "world");
-  }
-
-  private draw(inst: Instance, p: Painter, pass: Layer, inherited: Layer) {
-    const layer = inst.el.layer ?? inherited;
-    p.push();
-    const en = clamp(inst.ch.enter, 0, 1);
-    const ex = clamp(inst.ch.exit || 0, 0, 1);
-    if (en < 1) { p.alpha(en); p.scaleAt(inst.rect.center.x, inst.rect.center.y, 0.8 + 0.2 * easeOutBack(en)); }
-    if (ex > 0) { p.alpha(1 - ex); p.scaleAt(inst.rect.center.x, inst.rect.center.y, 1 - 0.25 * ex); }
-
-    if (layer === pass) {
-      const part = this.eff(inst);
-      if (part.render) {
-        const style = part.style ? part.style(tokens, inst.ch, inst.props) : {};
-        part.render(this.nodeOf(inst), p, style);
-      }
-    }
-    for (const g of inst.ghosts) this.draw(g, p, pass, layer);
-    for (const c of inst.children) this.draw(c, p, pass, layer);
-    p.pop();
-  }
 }
 
 /** Mount a Gratify app on a canvas. The entire framework entry point. */
@@ -553,5 +426,3 @@ export function mount<TDoc, TIntent>(
 ): Runtime<TDoc, TIntent> {
   return new Runtime(canvas, app);
 }
-
-export type { Intentish };

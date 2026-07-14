@@ -172,7 +172,7 @@ describe("extension algebra", () => {
     rt.step(2);
     const styleOf = (i: number) => {
       const inst = rt.root.children[i];
-      const eff = (rt as unknown as { eff(x: unknown): { style(t: unknown, c: unknown, p: unknown): unknown } }).eff(inst);
+      const eff = (rt as unknown as { effs: { get(x: unknown): { style(t: unknown, c: unknown, p: unknown): unknown } } }).effs.get(inst);
       return eff.style(null, {}, {}) as { n: number };
     };
     expect(styleOf(0).n).toBe(101);   // base part themed
@@ -191,8 +191,9 @@ describe("extension algebra", () => {
       view: () => Stack("root", {}, [withExt(Base("a", {}), extra), Base("b", {})]),
     }, { headless: true });
     rt.step(2);
-    const effA = (rt as unknown as { eff(x: unknown): { on?: unknown[] } }).eff(rt.root.children[0]);
-    const effB = (rt as unknown as { eff(x: unknown): { on?: unknown[] } }).eff(rt.root.children[1]);
+    const effs = (rt as unknown as { effs: { get(x: unknown): { on?: unknown[] } } }).effs;
+    const effA = effs.get(rt.root.children[0]);
+    const effB = effs.get(rt.root.children[1]);
     expect(effA.on!.length).toBe(2);
     expect(effB.on!.length).toBe(1);
     void hits;
@@ -200,7 +201,7 @@ describe("extension algebra", () => {
 });
 
 // ---- M3: anchors, gestures, keys/focus, impulses, viewport -------------------
-import { Anchor, Free, Gesture, Keys, Focusable, Pan } from "../src/gratify";
+import { Free, Gesture, Keys, Focusable, Pan } from "../src/gratify";
 
 interface EDoc { nodes: { id: string; pos: { x: number; y: number } }[]; hits: string[]; }
 type EIntent = { kind: "hit"; id: string } | { kind: "move"; id: string; pos: { x: number; y: number } };

@@ -1,12 +1,11 @@
 // ============================================================================
-// Gratify built-in parts: Stack, Row, Label. Containers are just parts with
-// measure/place facets — a custom layout is a part, no class ceremony.
+// Built-in layout containers: Stack, Row, Free, Layers. Containers are just
+// parts with measure/place facets — a custom layout is a part, no class
+// ceremony. Layout results feed position springs, so reflow animates.
 // ============================================================================
 
 import { Rect, v, Vec } from "./core";
 import { part } from "./part";
-import { tokens } from "./theme";
-import { calpha } from "./core";
 
 export interface StackProps {
   gap?: number;
@@ -75,29 +74,4 @@ export const Free = part<{ states?: Record<string, boolean> }>("free", {
 export const Layers = part<{ states?: Record<string, boolean> }>("layers", {
   measure: (_p, kids) => kids.reduce((m, s) => v(Math.max(m.x, s.x), Math.max(m.y, s.y)), v(0, 0)),
   place: (_p, r, kids) => kids.map(() => new Rect(r.x, r.y, r.w, r.h)),
-});
-
-export interface LabelProps {
-  text: string;
-  size?: number;
-  weight?: number;
-  dim?: boolean;
-  bright?: boolean;
-  states?: Record<string, boolean>;
-}
-
-export const Label = part<LabelProps>("label", {
-  size: (props, m) => {
-    const s = m.text(props.text, props.size ?? 13);
-    return v(s.x + 2, Math.max(s.y, 18));
-  },
-  render(node, p) {
-    const props = node.props;
-    const base = props.bright ? tokens.textBright : props.dim ? tokens.textDim : tokens.text;
-    // any `done`-style strike/dim is the app's business via states; default dims on "done"
-    const dim = node.ch.done || 0;
-    p.label(props.text, { x: node.rect.x + 1, y: node.rect.center.y },
-      calpha(tokens.mix(base, tokens.textDim, dim), 1 - 0.3 * dim),
-      { size: props.size ?? 13, weight: props.weight, align: "left" });
-  },
 });

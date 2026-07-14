@@ -7,6 +7,10 @@
 import { Rect, Spring } from "./core";
 import { PartDef } from "./part";
 
+/** Coordinate layers (M3): world is viewport-transformed; overlay is world
+ *  coords drawn above all content; screen is the untransformed HUD. */
+export type Layer = "world" | "overlay" | "screen";
+
 export interface Element {
   key: string;
   part: PartDef<unknown, unknown>;
@@ -19,7 +23,7 @@ export interface Element {
   exts?: unknown[];
   /** Coordinate layer: world (viewport-transformed, default), overlay (world
    *  coords, drawn above all content), screen (untransformed HUD). Inherited. */
-  layer?: "world" | "overlay" | "screen";
+  layer?: Layer;
 }
 
 export class Instance {
