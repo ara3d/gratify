@@ -1,4 +1,4 @@
-import{m as p,d as m,S as b,L as a,R as l,g as k,i as f,r as g,c as y,b as r}from"./source-panel-1CdPGxVg.js";import{d as x,w as d,b as w,m as h,c as v,e as E}from"./extend-BLEqxWLw.js";import{B as i,T as S}from"./widgets-PWsAZVbb.js";import{w as C}from"./widgets-DdaDB7gn.js";const B=`// ============================================================================
+import{m as u,d as m,S as k,L as o,R as c,f,g,a as l,r as b,c as x}from"./source-panel-CIMbntSC.js";import{d as y,w as d,b as h,c as w,e as v,f as S}from"./extend-PBQvpPXr.js";import{B as s,T as E,C,a as A}from"./widgets-BKG2T7ka.js";import{w as T}from"./widgets-deNE_SuD.js";const B=`// ============================================================================
 // Example: extensions — "wrap, don't edit", at all three scopes.
 //
 // An extension is an ordinary function from part definition to part
@@ -23,7 +23,7 @@ import{m as p,d as m,S as b,L as a,R as l,g as k,i as f,r as g,c as y,b as r}fro
 
 import {
   addChannels,        // append animated channels to a part
-  calpha, Channels, Color,
+  calpha, Channels,
   derivePart,         // scope 1: bake extensions into a new named part
   extendTheme,        // scope 2: extend a part app-wide while a theme is active
   clearThemeExt,      //          …and remove that again
@@ -35,10 +35,11 @@ import {
   PartExt,
   rect, rgb,
   Stack, Row, Label,
+  SurfaceStyle,       // the shared { fill, edge, text } restyle protocol
   Tokens,
   withExt,            // scope 3: apply to one element at its use site
 } from "gratify";
-import { Button, Toggle } from "../shared/widgets";
+import { Button, Card, Checkbox, Toggle } from "../shared/widgets";
 
 import { attachSourcePanel } from "../shared/source-panel";
 import mainSource from "./main.ts?raw";
@@ -80,11 +81,11 @@ const sheen: PartExt = (definition) => {
 const chunky: PartExt = mapSize((_props, _measure, baseSize) =>
   ({ x: baseSize.x + 16, y: Math.max(baseSize.y, 44) }));
 
-// 4. "Neon": a THEME-scope restyle. mapStyle receives the base style record,
-//    so we state only the fields we change — never restating the rest.
-interface Restylable { fill: Color; edge: Color; text: Color; }
-
-const neon: PartExt = mapStyle<Restylable>(
+// 4. "Neon": a THEME-scope restyle written against the SHARED SurfaceStyle
+//    protocol — { fill, edge, text }. Because Button, Checkbox and Card all
+//    expose those fields, this ONE definition restyles all three part kinds.
+//    mapStyle receives the base record, so we state only what we change.
+const neon: PartExt = mapStyle<SurfaceStyle>(
   (tokens: Tokens, channels: Channels, _props, baseStyle) => ({
     ...baseStyle,
     fill: tokens.mix(baseStyle.fill, tokens.accent2, 0.35 + 0.3 * channels.hover),
@@ -92,6 +93,9 @@ const neon: PartExt = mapStyle<Restylable>(
     text: tokens.textBright,
   }),
 );
+
+/** The parts the neon theme restyle reaches — one extension, three kinds. */
+const NEON_PARTS = ["button", "checkbox", "card"];
 
 // ── Scope 1: a new named part with the sheen baked in ─────────────────────────
 
@@ -114,12 +118,12 @@ function update(document: ExtensionsDocument, intent: ExtensionsIntent): Extensi
 
     case "toggle-neon": {
       const neonActive = !document.neonActive;
-      if (neonActive) {
-        // Scope 2: every part named "button" — or DERIVED from it, like
-        // FancyButton — gets the neon restyle while the dark theme is active.
-        extendTheme("dark", "button", neon as (definition: unknown) => unknown);
-      } else {
-        clearThemeExt("dark", "button");
+      // Scope 2: while the dark theme is active, every button (incl. DERIVED
+      // parts like FancyButton), checkbox and card gets the neon restyle — one
+      // extension reaching three different part kinds via the shared protocol.
+      for (const name of NEON_PARTS) {
+        if (neonActive) extendTheme("dark", name, neon as (definition: unknown) => unknown);
+        else clearThemeExt("dark", name);
       }
       return { ...document, neonActive };
     }
@@ -152,8 +156,17 @@ function view(document: ExtensionsDocument) {
     ]),
 
     Row("theme-row", { gap: 14 }, [
-      Label("theme-caption", { text: "Neon all buttons (theme scope)", dim: true }),
+      Label("theme-caption", { text: "Neon (theme scope — one restyle, three part kinds)", dim: true }),
       Toggle("neon-toggle", { on: document.neonActive, flip: { kind: "toggle-neon" } }),
+    ]),
+
+    // A card and a checkbox, so the neon toggle demonstrably reaches part kinds
+    // it was never written for — the SurfaceStyle protocol is what they share.
+    Card("neon-card", { title: "Card", value: "surface" }, [
+      Row("card-row", { gap: 10 }, [
+        Checkbox("cb", { on: document.neonActive, toggle: { kind: "toggle-neon" } }),
+        Label("cb-label", { text: "same protocol", dim: true }),
+      ]),
     ]),
 
     Label("hint", {
@@ -177,4 +190,4 @@ attachSourcePanel([
   { name: "main.ts", code: mainSource },
   { name: "widgets.ts (shared)", code: widgetsSource },
 ]);
-`,T=h((e,n,t,o)=>{o(),n.box(e.rect,8,r(0,0,0,0),r(255,92,108,.9),1.5)}),A=e=>{const n=w({"fx/sheen":{target:t=>t.ch.hover||0,rate:6}})(e);return h((t,o,L,u)=>{u();const s=t.ch["fx/sheen"]||0;if(s>.02){const c=t.rect;o.box(g(c.x,c.y,c.w*s,3),1.5,y(r(255,255,255),.35*s))}})(n)},P=E((e,n,t)=>({x:t.x+16,y:Math.max(t.y,44)})),N=v((e,n,t,o)=>({...o,fill:e.mix(o.fill,e.accent2,.35+.3*n.hover),edge:e.mix(e.accent2,e.textBright,n.hover*.5),text:e.textBright})),R=x("fancy-button",i,A);function I(e,n){switch(n.kind){case"clicked":return{...e,clickCount:e.clickCount+1};case"toggle-neon":{const t=!e.neonActive;return t?k("dark","button",N):f("dark","button"),{...e,neonActive:t}}}}function z(e){return b("root",{gap:16,pad:48},[a("title",{text:"Wrap, don't edit",size:20,weight:600,bright:!0}),a("subtitle",{text:`Clicks: ${e.clickCount}`,dim:!0}),l("buttons",{gap:8},[i("stock",{label:"Stock",press:{kind:"clicked"}}),R("fancy",{label:"Fancy (baked sheen)",press:{kind:"clicked"}}),d(i("outlined-one",{label:"Outlined (this one only)",press:{kind:"clicked"}}),T),d(i("chunky-one",{label:"Chunky",press:{kind:"clicked"}}),P)]),l("theme-row",{gap:14},[a("theme-caption",{text:"Neon all buttons (theme scope)",dim:!0}),S("neon-toggle",{on:e.neonActive,flip:{kind:"toggle-neon"}})]),a("hint",{text:"Hover the fancy button — its sheen channel is an appended facet.",dim:!0})])}const F=document.getElementById("c");p(F,{init:{clickCount:0,neonActive:!1},update:I,view:z});m([{name:"main.ts",code:B},{name:"widgets.ts (shared)",code:C}]);
+`,N=h((e,n,t,a)=>{a(),n.box(e.rect,8,l(0,0,0,0),l(255,92,108,.9),1.5)}),P=e=>{const n=S({"fx/sheen":{target:t=>t.ch.hover||0,rate:6}})(e);return h((t,a,O,p)=>{p();const i=t.ch["fx/sheen"]||0;if(i>.02){const r=t.rect;a.box(b(r.x,r.y,r.w*i,3),1.5,x(l(255,255,255),.35*i))}})(n)},R=w((e,n,t)=>({x:t.x+16,y:Math.max(t.y,44)})),_=v((e,n,t,a)=>({...a,fill:e.mix(a.fill,e.accent2,.35+.3*n.hover),edge:e.mix(e.accent2,e.textBright,n.hover*.5),text:e.textBright})),I=["button","checkbox","card"],L=y("fancy-button",s,P);function z(e,n){switch(n.kind){case"clicked":return{...e,clickCount:e.clickCount+1};case"toggle-neon":{const t=!e.neonActive;for(const a of I)t?f("dark",a,_):g("dark",a);return{...e,neonActive:t}}}}function F(e){return k("root",{gap:16,pad:48},[o("title",{text:"Wrap, don't edit",size:20,weight:600,bright:!0}),o("subtitle",{text:`Clicks: ${e.clickCount}`,dim:!0}),c("buttons",{gap:8},[s("stock",{label:"Stock",press:{kind:"clicked"}}),L("fancy",{label:"Fancy (baked sheen)",press:{kind:"clicked"}}),d(s("outlined-one",{label:"Outlined (this one only)",press:{kind:"clicked"}}),N),d(s("chunky-one",{label:"Chunky",press:{kind:"clicked"}}),R)]),c("theme-row",{gap:14},[o("theme-caption",{text:"Neon (theme scope — one restyle, three part kinds)",dim:!0}),E("neon-toggle",{on:e.neonActive,flip:{kind:"toggle-neon"}})]),C("neon-card",{title:"Card",value:"surface"},[c("card-row",{gap:10},[A("cb",{on:e.neonActive,toggle:{kind:"toggle-neon"}}),o("cb-label",{text:"same protocol",dim:!0})])]),o("hint",{text:"Hover the fancy button — its sheen channel is an appended facet.",dim:!0})])}const D=document.getElementById("c");u(D,{init:{clickCount:0,neonActive:!1},update:z,view:F});m([{name:"main.ts",code:B},{name:"widgets.ts (shared)",code:T}]);

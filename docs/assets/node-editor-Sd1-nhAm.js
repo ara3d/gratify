@@ -1,4 +1,4 @@
-import{p as l,c as d,G as m,w as S,k as E,P as v,K as x,v as i,t as k,j as I,r as A,h as N,b as f,l as P,m as R,d as T,n as G,S as C,L as D}from"./source-panel-1CdPGxVg.js";import{b as O}from"./effects-BLXO7xpg.js";const _=l("slice-line",{style:e=>({stroke:e.danger}),render(e,n,t){n.line(e.props.a,e.props.b,d(t.stroke,.9),2),n.dot(e.props.a,3,t.stroke),n.dot(e.props.b,3,t.stroke)}});function W(e){return m({begin:(n,t,r)=>r.mods.shift?{a:t,b:t}:null,move:(n,t,r)=>({...n,b:r}),view:n=>[_("slice-preview",{a:n.a,b:n.b})],up(n,t,r,o){const s=[];for(const a of e(t.props)){const c=o.anchor(a.from),p=o.anchor(a.to);if(!c||!p)continue;S(c.pos,p.pos,n.a,n.b)&&s.push({kind:"disconnect",id:a.id})}return s}})}const z=`// ============================================================================
+import{p as d,c,G as f,w as k,m as S,d as E,k as x,S as I,L as A,v as i,l as P,P as v,K as N,j as R,r as T,h as G,a as g,n as C}from"./source-panel-CIMbntSC.js";import{b as D}from"./effects-BlndeBIL.js";const O=d("slice-line",{style:e=>({stroke:e.danger}),render(e,n,t){n.line(e.props.a,e.props.b,c(t.stroke,.9),2),n.dot(e.props.a,3,t.stroke),n.dot(e.props.b,3,t.stroke)}});function _(e){return f({begin:(n,t,r)=>r.mods.shift?{a:t,b:t}:null,move:(n,t,r)=>({...n,b:r}),view:n=>[O("slice-preview",{a:n.a,b:n.b})],up(n,t,r,o){const s=[];for(const a of e(t.props)){const l=o.anchor(a.from),p=o.anchor(a.to);if(!l||!p)continue;k(l.pos,p.pos,n.a,n.b)&&s.push({kind:"disconnect",id:a.id})}return s}})}const W=`// ============================================================================
 // Example: node editor — the editor-tier flagship.
 //
 // Everything editor-grade here is built from ordinary Gratify concepts:
@@ -36,7 +36,6 @@ import {
   part,
   Press,
   rect, rgb,
-  tokens,
   v, Vec, vdist,
   wireDist,         // distance from a point to a wire curve (hit-testing)
   Stack, Label,
@@ -258,7 +257,7 @@ const GraphNodePart = part<NodeProps, NodeStyle>("graph-node", {
 
       up(state, node) {
         if (!state.snap) return;                                  // dropped on nothing
-        node.spawn?.(burst(state.snap.pos, tokens.accent));       // one-shot juice
+        node.spawn?.(burst(state.snap.pos, SNAP_SPARK));          // one-shot juice
         return { kind: "connect", a: state.fromAnchorId, b: state.snap.id };
       },
     }),
@@ -289,12 +288,21 @@ interface WireProps {
   states?: Record<string, boolean>;
 }
 
+// A fixed accent for the one-shot connect spark. A part-defining file may not
+// import the \`tokens\` singleton (npm run check), and a gesture callback has no
+// style facet to read; a constant juice color is fine for a transient burst.
+const SNAP_SPARK = rgb(64, 186, 255);
+
 const Wire = part<WireProps, { color: Color; selected: number }>("wire", {
 
-  style: (t, channels) => ({
-    color: t.accent,
-    selected: channels.sel || 0,     // the \`sel\` state tag, eased 0..1
-  }),
+  // The gold selection blend is resolved HERE, in style — render just paints it.
+  style: (t, channels) => {
+    const selected = channels.sel || 0;     // the \`sel\` state tag, eased 0..1
+    return {
+      color: selected > 0.02 ? t.mix(t.accent, rgb(255, 200, 80), selected) : t.accent,
+      selected,
+    };
+  },
 
   // Custom hit test: a wire is "hit" when the pointer is within 8 world px
   // of its curve — not its bounding rect.
@@ -312,10 +320,7 @@ const Wire = part<WireProps, { color: Color; selected: number }>("wire", {
     // Shadow pass, then the wire itself. Selection blends toward gold and
     // thickens; hover thickens slightly (the affordance for "clickable").
     painter.wire(a, b, calpha(rgb(0, 0, 0), 0.35), 4.5);
-    const color = style.selected > 0.02
-      ? tokens.mix(style.color, rgb(255, 200, 80), style.selected)
-      : style.color;
-    painter.wire(a, b, calpha(color, 0.9), 2.2 + 1.6 * style.selected + 0.8 * node.ch.hover);
+    painter.wire(a, b, calpha(style.color, 0.9), 2.2 + 1.6 * style.selected + 0.8 * node.ch.hover);
   },
 
   on: [
@@ -411,7 +416,7 @@ attachSourcePanel([
   { name: "main.ts", code: mainSource },
   { name: "slice.ts", code: sliceSource },
 ]);
-`,L=`// ============================================================================
+`,z=`// ============================================================================
 // slice.ts — a NEW editor gesture in ONE app-side file, zero framework edits.
 //
 // Hold Shift and drag a line across wires: every wire the line crosses is
@@ -521,4 +526,4 @@ export function slice(edgesOfProps: (props: unknown) => EdgeRef[]): Interactor<u
 }
 
 export { SliceLine };
-`;let K=100;function V(e,n){switch(n.kind){case"move":return{...e,nodes:{...e.nodes,[n.id]:{...e.nodes[n.id],pos:n.pos}}};case"connect":{const[t,r]=n.a.endsWith("/out")?[n.a,n.b]:[n.b,n.a],o=e.edges.filter(s=>s.to!==r);return{...e,edges:[...o,{id:`edge-${K++}`,from:t,to:r}]}}case"disconnect":return{...e,edges:e.edges.filter(t=>t.id!==n.id),selectedEdgeId:e.selectedEdgeId===n.id?null:e.selectedEdgeId};case"select":return{...e,selectedEdgeId:n.id}}}const w=e=>e.endsWith("/out")?"out":"in",b=e=>e.split("/")[0],B=(e,n)=>w(e)!==w(n.id)&&b(e)!==b(n.id),U=l("surface",{style:e=>({gridDot:d(e.muted,.35)}),hit:()=>!0,render(e,n,t){const r=e.view,o=28,s=Math.floor(-r.pan.x/r.zoom/o)*o,a=(r.w-r.pan.x)/r.zoom,c=Math.floor(-r.pan.y/r.zoom/o)*o,p=(r.h-r.pan.y)/r.zoom;for(let h=s;h<=a;h+=o)for(let g=c;g<=p;g+=o)n.dot(i(h,g),1,t.gridDot)},on:[W(e=>e.edges),E(),v(()=>({kind:"select",id:null})),x({Delete:e=>e.props.selectedEdgeId?{kind:"disconnect",id:e.props.selectedEdgeId}:null,Backspace:e=>e.props.selectedEdgeId?{kind:"disconnect",id:e.props.selectedEdgeId}:null})]}),y=5.5,H=14,M=l("graph-node",{size:()=>i(150,56),anchors:e=>[{id:`${e.props.id}/in`,pos:i(e.rect.x,e.rect.center.y),meta:{kind:"in"}},{id:`${e.props.id}/out`,pos:i(e.rect.right,e.rect.center.y),meta:{kind:"out"}}],style(e,n){return{fill:e.mix(e.surface,e.surfaceHi,.4*n.hover+.6*n.drag),edge:e.mix(e.muted,e.accent,.5*n.hover+.5*n.drag),text:e.mix(e.text,e.textBright,n.hover),lift:3*n.drag,socket:e.accent}},render(e,n,t){const r=e.rect.raise(t.lift);n.box(r,10,t.fill,t.edge,1.2),n.box(A(r.x,r.y,r.w,6),3,N(e.props.hue,.7,.55)),n.label(e.props.title,i(r.x+12,r.center.y+3),t.text,{align:"left",weight:500}),n.dot(i(r.x,r.center.y),y,t.socket),n.dot(i(r.right,r.center.y),y,t.socket)},on:[m({begin(e,n,t){for(const r of["/out","/in"]){const o=t.anchor(e.props.id+r);if(o&&I(o.pos,n)<H)return{fromAnchorId:o.id,cursor:n}}return null},move:(e,n,t,r)=>({...e,cursor:t,snap:r.nearestAnchor(t,26,o=>B(e.fromAnchorId,o))}),view(e,n){var r;const t=n.anchor(e.fromAnchorId);return t?[F("rubber-wire",{a:t.pos,b:((r=e.snap)==null?void 0:r.pos)??e.cursor,snapped:e.snap!==void 0})]:[]},up(e,n){var t;if(e.snap)return(t=n.spawn)==null||t.call(n,O(e.snap.pos,k.accent)),{kind:"connect",a:e.fromAnchorId,b:e.snap.id}}}),m({begin:(e,n)=>({grabOffset:i(n.x-e.props.pos.x,n.y-e.props.pos.y)}),during:(e,n,t)=>({kind:"move",id:n.props.id,pos:i(t.x-e.grabOffset.x,t.y-e.grabOffset.y)})})]}),q=l("wire",{style:(e,n)=>({color:e.accent,selected:n.sel||0}),hit(e,n){var o,s;const t=(o=e.anchor)==null?void 0:o.call(e,e.props.from),r=(s=e.anchor)==null?void 0:s.call(e,e.props.to);return!!t&&!!r&&P(t,r,n)<8},render(e,n,t){var a,c;const r=(a=e.anchor)==null?void 0:a.call(e,e.props.from),o=(c=e.anchor)==null?void 0:c.call(e,e.props.to);if(!r||!o)return;n.wire(r,o,d(f(0,0,0),.35),4.5);const s=t.selected>.02?k.mix(t.color,f(255,200,80),t.selected):t.color;n.wire(r,o,d(s,.9),2.2+1.6*t.selected+.8*e.ch.hover)},on:[v(e=>({kind:"select",id:e.props.id}))]}),F=l("rubber-wire",{style:e=>({color:e.accent}),render(e,n,t){const r=e.props.snapped?f(90,220,130):d(t.color,.8);n.wire(e.props.a,e.props.b,r,e.props.snapped?2.6:2),n.dot(e.props.b,4,r)}}),$=e=>({...e,layer:"screen"});function j(e){return U("root",{edges:e.edges,selectedEdgeId:e.selectedEdgeId},[G("graph",{},[...e.edges.map(n=>q(n.id,{id:n.id,from:n.from,to:n.to,states:{sel:e.selectedEdgeId===n.id}})),...Object.values(e.nodes).map(n=>M(n.id,{id:n.id,title:n.title,hue:n.hue,pos:n.pos}))]),$(C("hud",{pad:12},[D("hint",{text:"drag node · drag socket = wire · click wire + Del = cut · Shift-drag = slice · drag/wheel = pan/zoom",dim:!0,size:12})]))])}const u=(e,n,t,r,o)=>({id:e,title:n,hue:t,pos:i(r,o)}),Y=document.getElementById("c");R(Y,{init:{nodes:{time:u("time","Time",200,120,140),noise:u("noise","Noise",260,120,300),mix:u("mix","Mix",140,380,220),out:u("out","Output",30,640,220)},edges:[{id:"edge-1",from:"time/out",to:"mix/in"},{id:"edge-2",from:"mix/out",to:"out/in"}],selectedEdgeId:null},update:V,view:j});T([{name:"main.ts",code:z},{name:"slice.ts",code:L}]);
+`;let L=100;function K(e,n){switch(n.kind){case"move":return{...e,nodes:{...e.nodes,[n.id]:{...e.nodes[n.id],pos:n.pos}}};case"connect":{const[t,r]=n.a.endsWith("/out")?[n.a,n.b]:[n.b,n.a],o=e.edges.filter(s=>s.to!==r);return{...e,edges:[...o,{id:`edge-${L++}`,from:t,to:r}]}}case"disconnect":return{...e,edges:e.edges.filter(t=>t.id!==n.id),selectedEdgeId:e.selectedEdgeId===n.id?null:e.selectedEdgeId};case"select":return{...e,selectedEdgeId:n.id}}}const w=e=>e.endsWith("/out")?"out":"in",b=e=>e.split("/")[0],V=(e,n)=>w(e)!==w(n.id)&&b(e)!==b(n.id),B=d("surface",{style:e=>({gridDot:c(e.muted,.35)}),hit:()=>!0,render(e,n,t){const r=e.view,o=28,s=Math.floor(-r.pan.x/r.zoom/o)*o,a=(r.w-r.pan.x)/r.zoom,l=Math.floor(-r.pan.y/r.zoom/o)*o,p=(r.h-r.pan.y)/r.zoom;for(let h=s;h<=a;h+=o)for(let m=l;m<=p;m+=o)n.dot(i(h,m),1,t.gridDot)},on:[_(e=>e.edges),P(),v(()=>({kind:"select",id:null})),N({Delete:e=>e.props.selectedEdgeId?{kind:"disconnect",id:e.props.selectedEdgeId}:null,Backspace:e=>e.props.selectedEdgeId?{kind:"disconnect",id:e.props.selectedEdgeId}:null})]}),y=5.5,H=14,U=d("graph-node",{size:()=>i(150,56),anchors:e=>[{id:`${e.props.id}/in`,pos:i(e.rect.x,e.rect.center.y),meta:{kind:"in"}},{id:`${e.props.id}/out`,pos:i(e.rect.right,e.rect.center.y),meta:{kind:"out"}}],style(e,n){return{fill:e.mix(e.surface,e.surfaceHi,.4*n.hover+.6*n.drag),edge:e.mix(e.muted,e.accent,.5*n.hover+.5*n.drag),text:e.mix(e.text,e.textBright,n.hover),lift:3*n.drag,socket:e.accent}},render(e,n,t){const r=e.rect.raise(t.lift);n.box(r,10,t.fill,t.edge,1.2),n.box(T(r.x,r.y,r.w,6),3,G(e.props.hue,.7,.55)),n.label(e.props.title,i(r.x+12,r.center.y+3),t.text,{align:"left",weight:500}),n.dot(i(r.x,r.center.y),y,t.socket),n.dot(i(r.right,r.center.y),y,t.socket)},on:[f({begin(e,n,t){for(const r of["/out","/in"]){const o=t.anchor(e.props.id+r);if(o&&R(o.pos,n)<H)return{fromAnchorId:o.id,cursor:n}}return null},move:(e,n,t,r)=>({...e,cursor:t,snap:r.nearestAnchor(t,26,o=>V(e.fromAnchorId,o))}),view(e,n){var r;const t=n.anchor(e.fromAnchorId);return t?[F("rubber-wire",{a:t.pos,b:((r=e.snap)==null?void 0:r.pos)??e.cursor,snapped:e.snap!==void 0})]:[]},up(e,n){var t;if(e.snap)return(t=n.spawn)==null||t.call(n,D(e.snap.pos,M)),{kind:"connect",a:e.fromAnchorId,b:e.snap.id}}}),f({begin:(e,n)=>({grabOffset:i(n.x-e.props.pos.x,n.y-e.props.pos.y)}),during:(e,n,t)=>({kind:"move",id:n.props.id,pos:i(t.x-e.grabOffset.x,t.y-e.grabOffset.y)})})]}),M=g(64,186,255),q=d("wire",{style:(e,n)=>{const t=n.sel||0;return{color:t>.02?e.mix(e.accent,g(255,200,80),t):e.accent,selected:t}},hit(e,n){var o,s;const t=(o=e.anchor)==null?void 0:o.call(e,e.props.from),r=(s=e.anchor)==null?void 0:s.call(e,e.props.to);return!!t&&!!r&&C(t,r,n)<8},render(e,n,t){var s,a;const r=(s=e.anchor)==null?void 0:s.call(e,e.props.from),o=(a=e.anchor)==null?void 0:a.call(e,e.props.to);!r||!o||(n.wire(r,o,c(g(0,0,0),.35),4.5),n.wire(r,o,c(t.color,.9),2.2+1.6*t.selected+.8*e.ch.hover))},on:[v(e=>({kind:"select",id:e.props.id}))]}),F=d("rubber-wire",{style:e=>({color:e.accent}),render(e,n,t){const r=e.props.snapped?g(90,220,130):c(t.color,.8);n.wire(e.props.a,e.props.b,r,e.props.snapped?2.6:2),n.dot(e.props.b,4,r)}}),j=e=>({...e,layer:"screen"});function $(e){return B("root",{edges:e.edges,selectedEdgeId:e.selectedEdgeId},[x("graph",{},[...e.edges.map(n=>q(n.id,{id:n.id,from:n.from,to:n.to,states:{sel:e.selectedEdgeId===n.id}})),...Object.values(e.nodes).map(n=>U(n.id,{id:n.id,title:n.title,hue:n.hue,pos:n.pos}))]),j(I("hud",{pad:12},[A("hint",{text:"drag node · drag socket = wire · click wire + Del = cut · Shift-drag = slice · drag/wheel = pan/zoom",dim:!0,size:12})]))])}const u=(e,n,t,r,o)=>({id:e,title:n,hue:t,pos:i(r,o)}),Y=document.getElementById("c");S(Y,{init:{nodes:{time:u("time","Time",200,120,140),noise:u("noise","Noise",260,120,300),mix:u("mix","Mix",140,380,220),out:u("out","Output",30,640,220)},edges:[{id:"edge-1",from:"time/out",to:"mix/in"},{id:"edge-2",from:"mix/out",to:"out/in"}],selectedEdgeId:null},update:K,view:$});E([{name:"main.ts",code:W},{name:"slice.ts",code:z}]);

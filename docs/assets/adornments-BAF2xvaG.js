@@ -1,4 +1,4 @@
-import{p as c,P as u,v as r,c as a,r as g,a as x,b as p,t as i,m as v,d as y,S as k,L as h,e as d}from"./source-panel-1CdPGxVg.js";import{w,a as l}from"./extend-BLEqxWLw.js";import{B as f}from"./widgets-PWsAZVbb.js";const I=`// ============================================================================
+import{p as a,r as m,a as p,v as r,c as i,b as g,m as x,d as v,P as u,S as y,L as h,e as c}from"./source-panel-CIMbntSC.js";import{w,a as d}from"./extend-PBQvpPXr.js";import{B as k}from"./widgets-BKG2T7ka.js";const f=`// ============================================================================
 // Example: adornments — decoration by composition.
 //
 // An adornment is an overlay element anchored to a host widget: a tooltip, a
@@ -20,7 +20,7 @@ import{p as c,P as u,v as r,c as a,r as g,a as x,b as p,t as i,m as v,d as y,S a
 
 import {
   addAdorn, at, calpha, cmix, Color, GNode, mount, PartExt, part, Press, rect,
-  rgb, tokens, v, Vec, withExt, Stack, Label,
+  rgb, v, Vec, withExt, Stack, Label,
 } from "gratify";
 import { Button } from "../shared/widgets";
 
@@ -76,26 +76,27 @@ const Card = part<CardProps, { fill: Color; edge: Color; text: Color }>("card", 
 
 // A tooltip bubble that self-centers above an anchor point (so it can overflow
 // the host). Decorative — no interactors — so it stays transparent to clicks.
-const Tooltip = part<{ text: string; anchor: Vec }>("tooltip", {
+const Tooltip = part<{ text: string; anchor: Vec }>()("tooltip", {
   size: (props, measure) => v(measure.text(props.text).x + 20, 28),
-  render(node, paint) {
+  style: (t) => ({ bubble: cmix(t.bg, rgb(0, 0, 0), 0.45), edge: calpha(t.accent, 0.5), text: t.textBright, pointer: calpha(t.accent, 0.7) }),
+  render(node, paint, s) {
     const a = node.props.anchor;
     const w = paint.measure.text(node.props.text).x + 20;
     const box = rect(a.x - w / 2, a.y - 34, w, 26);
-    const bubble = cmix(tokens.bg, rgb(0, 0, 0), 0.45);
-    paint.glow(rgb(0, 0, 0), 12, () => paint.box(box, 7, bubble, calpha(tokens.accent, 0.5), 1));
-    paint.label(node.props.text, box.center, tokens.textBright, { size: 12 });
-    paint.dot(v(a.x, a.y - 6), 2.5, calpha(tokens.accent, 0.7));   // a little pointer
+    paint.glow(rgb(0, 0, 0), 12, () => paint.box(box, 7, s.bubble, s.edge, 1));
+    paint.label(node.props.text, box.center, s.text, { size: 12 });
+    paint.dot(v(a.x, a.y - 6), 2.5, s.pointer);   // a little pointer
   },
 });
 
 // A count badge at a corner. Decorative.
-const Badge = part<{ count: number }>("badge", {
+const Badge = part<{ count: number }>()("badge", {
   size: () => v(22, 22),
-  render(node, paint) {
+  style: (t) => ({ accent: t.accent, text: t.textBright }),
+  render(node, paint, s) {
     const c = node.rect.center;
-    paint.glow(tokens.accent, 8 * (0.5 + 0.5 * node.ch.enter), () => paint.dot(c, 10, tokens.accent));
-    paint.label(String(node.props.count), c, tokens.textBright, { size: 11, weight: 700 });
+    paint.glow(s.accent, 8 * (0.5 + 0.5 * node.ch.enter), () => paint.dot(c, 10, s.accent));
+    paint.label(String(node.props.count), c, s.text, { size: 11, weight: 700 });
   },
 });
 
@@ -168,4 +169,4 @@ const canvas = document.getElementById("c") as HTMLCanvasElement;
 mount(canvas, { init: { items: INITIAL }, update, view });
 
 attachSourcePanel([{ name: "main.ts", code: mainSource }]);
-`,b=[{id:"layers",title:"Layers",sub:"3 visible",tip:"The world / overlay / screen stack",count:0},{id:"springs",title:"Springs",sub:"stiff 240",tip:"Momentum and overshoot",count:0},{id:"channels",title:"Channels",sub:"hover · press",tip:"Numbers that chase targets",count:2},{id:"reconcile",title:"Reconcile",sub:"keyed",tip:"Identity survives rebuilds",count:0}];function A(e,t){switch(t.kind){case"remove":return{items:e.items.filter(n=>n.id!==t.id)};case"bump":return{items:e.items.map(n=>n.id===t.id?{...n,count:n.count+1}:n)};case"reset":return{items:b}}}const B=c("card",{size:()=>r(200,62),style:(e,t)=>({fill:e.mix(e.surface,e.surfaceHi,.4*t.hover+.6*t.press),edge:e.mix(e.muted,e.accent,t.hover),text:e.mix(e.text,e.textBright,t.hover)}),render(e,t,n){const o=e.rect;t.box(o,10,n.fill,n.edge,1),t.label(e.props.title,r(o.x+14,o.center.y-8),n.text,{align:"left",weight:600}),t.label(e.props.sub,r(o.x+14,o.center.y+10),a(n.text,.6),{align:"left",size:11})},on:[u(e=>e.props.press)]}),C=c("tooltip",{size:(e,t)=>r(t.text(e.text).x+20,28),render(e,t){const n=e.props.anchor,o=t.measure.text(e.props.text).x+20,s=g(n.x-o/2,n.y-34,o,26),m=x(i.bg,p(0,0,0),.45);t.glow(p(0,0,0),12,()=>t.box(s,7,m,a(i.accent,.5),1)),t.label(e.props.text,s.center,i.textBright,{size:12}),t.dot(r(n.x,n.y-6),2.5,a(i.accent,.7))}}),E=c("badge",{size:()=>r(22,22),render(e,t){const n=e.rect.center;t.glow(i.accent,8*(.5+.5*e.ch.enter),()=>t.dot(n,10,i.accent)),t.label(String(e.props.count),n,i.textBright,{size:11,weight:700})}}),T=c("close-button",{size:()=>r(22,22),style:(e,t)=>({bg:a(e.danger,.18+.6*t.hover),x:e.mix(e.textDim,e.textBright,t.hover),pop:t.press}),render(e,t,n){const o=e.rect.center,s=4*(1-.3*n.pop);t.dot(o,11,n.bg),t.line(r(o.x-s,o.y-s),r(o.x+s,o.y+s),n.x,2),t.line(r(o.x-s,o.y+s),r(o.x+s,o.y-s),n.x,2)},on:[u(e=>e.props.press)]}),P=e=>l(t=>{if((t.ch.hover??0)<.5)return[];const n=r(t.rect.center.x,t.rect.y);return[d(C("tip",{text:e,anchor:n}),n)]}),S=e=>l(t=>e>0?[d(E("badge",{count:e}),r(t.rect.right-14,t.rect.y-8))]:[]),z=e=>l(t=>[d(T("x",{press:e}),r(t.rect.x-8,t.rect.y-8))]);function N(e){return k("root",{gap:16,pad:40},[h("title",{text:"Adornments — decoration by composition",size:18,weight:600,bright:!0}),h("sub",{text:"hover a card for a tooltip · click a card to bump its badge · click × to remove",dim:!0}),...e.items.map(t=>w(B(t.id,{title:t.title,sub:t.sub,press:{kind:"bump",id:t.id}}),P(t.tip),z({kind:"remove",id:t.id}),...t.count>0?[S(t.count)]:[])),f("reset",{label:"Reset",press:{kind:"reset"},accent:!0})])}const L=document.getElementById("c");v(L,{init:{items:b},update:A,view:N});y([{name:"main.ts",code:I}]);
+`,b=[{id:"layers",title:"Layers",sub:"3 visible",tip:"The world / overlay / screen stack",count:0},{id:"springs",title:"Springs",sub:"stiff 240",tip:"Momentum and overshoot",count:0},{id:"channels",title:"Channels",sub:"hover · press",tip:"Numbers that chase targets",count:2},{id:"reconcile",title:"Reconcile",sub:"keyed",tip:"Identity survives rebuilds",count:0}];function I(t,e){switch(e.kind){case"remove":return{items:t.items.filter(n=>n.id!==e.id)};case"bump":return{items:t.items.map(n=>n.id===e.id?{...n,count:n.count+1}:n)};case"reset":return{items:b}}}const A=a("card",{size:()=>r(200,62),style:(t,e)=>({fill:t.mix(t.surface,t.surfaceHi,.4*e.hover+.6*e.press),edge:t.mix(t.muted,t.accent,e.hover),text:t.mix(t.text,t.textBright,e.hover)}),render(t,e,n){const o=t.rect;e.box(o,10,n.fill,n.edge,1),e.label(t.props.title,r(o.x+14,o.center.y-8),n.text,{align:"left",weight:600}),e.label(t.props.sub,r(o.x+14,o.center.y+10),i(n.text,.6),{align:"left",size:11})},on:[u(t=>t.props.press)]}),B=a()("tooltip",{size:(t,e)=>r(e.text(t.text).x+20,28),style:t=>({bubble:g(t.bg,p(0,0,0),.45),edge:i(t.accent,.5),text:t.textBright,pointer:i(t.accent,.7)}),render(t,e,n){const o=t.props.anchor,s=e.measure.text(t.props.text).x+20,l=m(o.x-s/2,o.y-34,s,26);e.glow(p(0,0,0),12,()=>e.box(l,7,n.bubble,n.edge,1)),e.label(t.props.text,l.center,n.text,{size:12}),e.dot(r(o.x,o.y-6),2.5,n.pointer)}}),C=a()("badge",{size:()=>r(22,22),style:t=>({accent:t.accent,text:t.textBright}),render(t,e,n){const o=t.rect.center;e.glow(n.accent,8*(.5+.5*t.ch.enter),()=>e.dot(o,10,n.accent)),e.label(String(t.props.count),o,n.text,{size:11,weight:700})}}),E=a("close-button",{size:()=>r(22,22),style:(t,e)=>({bg:i(t.danger,.18+.6*e.hover),x:t.mix(t.textDim,t.textBright,e.hover),pop:e.press}),render(t,e,n){const o=t.rect.center,s=4*(1-.3*n.pop);e.dot(o,11,n.bg),e.line(r(o.x-s,o.y-s),r(o.x+s,o.y+s),n.x,2),e.line(r(o.x-s,o.y+s),r(o.x+s,o.y-s),n.x,2)},on:[u(t=>t.props.press)]}),T=t=>d(e=>{if((e.ch.hover??0)<.5)return[];const n=r(e.rect.center.x,e.rect.y);return[c(B("tip",{text:t,anchor:n}),n)]}),P=t=>d(e=>t>0?[c(C("badge",{count:t}),r(e.rect.right-14,e.rect.y-8))]:[]),S=t=>d(e=>[c(E("x",{press:t}),r(e.rect.x-8,e.rect.y-8))]);function z(t){return y("root",{gap:16,pad:40},[h("title",{text:"Adornments — decoration by composition",size:18,weight:600,bright:!0}),h("sub",{text:"hover a card for a tooltip · click a card to bump its badge · click × to remove",dim:!0}),...t.items.map(e=>w(A(e.id,{title:e.title,sub:e.sub,press:{kind:"bump",id:e.id}}),T(e.tip),S({kind:"remove",id:e.id}),...e.count>0?[P(e.count)]:[])),k("reset",{label:"Reset",press:{kind:"reset"},accent:!0})])}const N=document.getElementById("c");x(N,{init:{items:b},update:I,view:z});v([{name:"main.ts",code:f}]);
