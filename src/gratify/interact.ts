@@ -17,6 +17,26 @@ import type { Element } from "./scene";
 /** Intents are the app's typed vocabulary; the framework treats them opaquely. */
 export type Intentish = unknown;
 
+// ---- local intents (guide §4d) ----------------------------------------------
+// A `Local(...)`-wrapped intent routes to the nearest enclosing part with a
+// `reduce` facet — it never reaches the app's `update`. That is the whole
+// contract: private widget state (dropdown-open, a scrub draft) changes through
+// the same intent→reducer discipline as the app model, just scoped down.
+
+/** The brand a `Local(...)` wrapper carries. Structural (a string key) so the
+ *  check survives duplicate module instances. */
+export interface LocalIntent<T = unknown> { __gratifyLocal: T }
+
+/** Wrap an intent as LOCAL: routed to the nearest enclosing `reduce`, never to
+ *  the app's `update`. Emit these from a composite's own interactors
+ *  (`.press(() => Local({ kind: "toggle" }))`). */
+export const Local = <T>(intent: T): LocalIntent<T> => ({ __gratifyLocal: intent });
+
+export const isLocal = (i: unknown): i is LocalIntent =>
+  typeof i === "object" && i !== null && "__gratifyLocal" in i;
+
+export const unwrapLocal = <T>(i: LocalIntent<T>): T => i.__gratifyLocal;
+
 // ---- read-only scene query (gestures + effects) ------------------------------
 export interface Anchor {
   id: string;

@@ -27,11 +27,22 @@ export interface Element {
   /** Top-left of this element's rect, in its layer's coordinates. Used by
    *  `Free` and by adornments; set it with `at(element, pos)`. */
   pos?: Vec;
+  /** Modal marker (adornments): while the topmost modal element is present it
+   *  gets input first — a press outside its bounds (or Escape) dispatches
+   *  `dismiss` and is CONSUMED, so click-away closes without also selecting
+   *  what's underneath. Set it with `modal(element, dismiss)`. */
+  modal?: { dismiss?: unknown };
 }
 
 /** Position an element (adornments, `Free` children): sets the top-left of its
  *  rect to `pos` in its layer's coordinates. */
 export const at = (element: Element, pos: Vec): Element => ({ ...element, pos });
+
+/** Mark an adornment element modal: it gets input first, and a press outside
+ *  it (or Escape) dispatches `dismiss` — typically `Local({ kind: "close" })`
+ *  — and is consumed. One rule; the whole click-away story. */
+export const modal = (element: Element, dismiss?: unknown): Element =>
+  ({ ...element, modal: { dismiss } });
 
 export class Instance {
   key: string;
@@ -53,7 +64,7 @@ export class Instance {
   states = new Set<string>();
   exiting = false;
   freshGhost = false;
-  local?: unknown;                  // instance-local UI state (M3 wires up routing)
+  local?: unknown;                  // instance-local UI state; written only by reduce (unset = part's localInit)
 
   constructor(e: Element, parent?: Instance) {
     this.key = e.key; this.part = e.part; this.el = e; this.parent = parent;

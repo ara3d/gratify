@@ -21,12 +21,16 @@ export type AutoChannel = "hover" | "press" | "drag" | "focus" | "enter" | "exit
  *  names the part declared — the builder threads it through, so `node.ch.`
  *  autocompletes the automatic channels plus your own. (State-tag channels are
  *  use-site dynamic, so the open index signature stays.) */
-export interface GNode<P, K extends string = string> {
+export interface GNode<P, K extends string = string, L = unknown> {
   key: string;
   props: P;
   rect: Rect;
   ch: Record<K | AutoChannel, number> & Channels;
   states: Set<string>;
+  /** Instance-local UI state (the `local`/`reduce` facets, guide §4d): the
+   *  part's own private record — dropdown-open, a scrub draft. Changed only by
+   *  `reduce`; reads as the declared initial value until then. */
+  local?: L;
   /** Last pointer position (world coords for world-layer parts), if any. */
   pointer?: Vec;
   /** Spawn a transient effect (README §"one-shot juice"). */
@@ -95,7 +99,7 @@ export interface MeasureCtx extends Measure {
   children(avail: Avail): Vec[];
 }
 
-export interface PartSpec<P, S = Record<string, unknown>> {
+export interface PartSpec<P, S = Record<string, unknown>, L = unknown> {
   /** Intrinsic size of a leaf part, independent of available room. Sugar for a
    *  `measure` that ignores `avail`. Keep using this for fixed-size widgets. */
   size?(props: P, m: Measure): Vec;
@@ -121,8 +125,19 @@ export interface PartSpec<P, S = Record<string, unknown>> {
    *  at reconcile time (the state clock), never per frame — structure is a
    *  function of state; motion stays in channels. `children` are the use-site
    *  children: place them where the composite wants its content slot. A part
-   *  without `body` behaves exactly as before. Wrap with `mapBody`. */
-  body?(props: P, children: Element[]): Element[];
+   *  without `body` behaves exactly as before. Wrap with `mapBody`. Parts that
+   *  declared local state receive it as the third argument. */
+  body?(props: P, children: Element[], local: L): Element[];
+  /** Initial instance-local state (guide §4d). Declaring it is what makes
+   *  `reduce` meaningful; `body`/`adorn`/channel targets then see `local`. */
+  localInit?: L;
+  /** Local reducer: `Local(...)`-wrapped intents route to the NEAREST enclosing
+   *  part with a `reduce` — never to the app's `update`. Mirrors `update`'s
+   *  shape: `(local, intent) → [newLocal]`, or `[newLocal, forward]` to send an
+   *  intent onward (how a commit turns a private draft into a real app intent).
+   *  The forwarded intent re-enters routing ABOVE this node: wrap it in
+   *  `Local(...)` to target a higher reducer, or leave it bare for `update`. */
+  reduce?(local: L, intent: any, node: GNode<P, string, L>): readonly [L, Intentish?];
   /** Behavior: interactors, as values. They only emit intents. */
   on?: Interactor<P>[];
   /** Adornments: overlay elements anchored to this host (tooltips, badges,
@@ -181,7 +196,8 @@ type Cap =
   | "size" | "intrinsic" | "measure" | "arrange" | "fill" | "pack" | "body"
   | "style" | "render"
   | "channels" | "on" | "press" | "drag1d" | "gesture" | "keys"
-  | "adorn" | "anchors" | "hit";
+  | "adorn" | "anchors" | "hit"
+  | "local" | "reduce";
 
 type LayoutCap = "size" | "intrinsic" | "measure" | "arrange" | "fill" | "pack" | "body";
 
@@ -201,74 +217,90 @@ export type PackFn<P> = (sizes: Vec[], avail: Avail, props: P) =>
 /** The builder's method surface. `P` is the use-site prop type, `F` the
  *  facet-view prop type (defaults applied), `S` the style record so far,
  *  `C` the remaining capability set, `K` the declared channel names (threaded
- *  into `GNode` so `node.ch.` autocompletes). */
-interface BuilderMethods<P, F, S, C extends Cap, K extends string> {
+ *  into `GNode` so `node.ch.` autocompletes), `L` the local-state type
+ *  (inferred at `.local()`, threaded into every facet's `node.local`). */
+interface BuilderMethods<P, F, S, C extends Cap, K extends string, L> {
   /** Fix the prop type. First step, if present. */
-  props<P2>(): PartBuilder<P2, P2, S, Exclude<C, "props"> | "defaults", K>;
+  props<P2>(): PartBuilder<P2, P2, S, Exclude<C, "props" | "reduce"> | "defaults", K, L>;
   /** Default prop values, merged under use-site props at element creation.
    *  Defaulted keys become non-optional inside every facet — no more `?? 8`. */
-  defaults<D extends Partial<F>>(d: D): PartBuilder<P, Defaulted<F, D>, S, Done<C, never>, K>;
+  defaults<D extends Partial<F>>(d: D): PartBuilder<P, Defaulted<F, D>, S, Done<C, never>, K, L>;
+
+  /** Declare instance-local UI state by its initial value (L is INFERRED —
+   *  parity with `.style`). Unlocks `.reduce()`; `body`/`adorn`/channel targets
+   *  then see the typed `local`. Guide §4d litmus test: state that evaporates
+   *  harmlessly when the widget disappears (dropdown-open, a scrub draft) is
+   *  local; state that undo/save must honor belongs in the app `Doc`. */
+  local<L2>(init: L2): PartBuilder<P, F, S, Exclude<C, "local" | "props" | "defaults"> | "reduce", K, L2>;
+  /** Local reducer — `(local, intent) → [newLocal]`, or `[newLocal, forward]`
+   *  to send an intent onward (bare → app `update`; `Local(...)`-wrapped →
+   *  a higher reducer). `Local(...)` intents from this node's subtree (and its
+   *  adornments) land here. Annotate the intent parameter with your local
+   *  intent union — that's the reducer's whole input vocabulary. */
+  reduce<LI>(f: (local: L, intent: LI, node: GNode<F, K, L>) => readonly [L, Intentish?]):
+    PartBuilder<P, F, S, Done<C, "reduce">, K, L>;
 
   /** Leaf: intrinsic size, independent of available room. */
-  size(f: (props: F, m: Measure) => Vec): PartBuilder<P, F, S, Done<C, LayoutCap>, K>;
+  size(f: (props: F, m: Measure) => Vec): PartBuilder<P, F, S, Done<C, LayoutCap>, K, L>;
   /** Leaf: constant size. Sugar for `size(() => v(w, h))`. */
-  intrinsic(w: number, h: number): PartBuilder<P, F, S, Done<C, LayoutCap>, K>;
+  intrinsic(w: number, h: number): PartBuilder<P, F, S, Done<C, LayoutCap>, K, L>;
   /** Container: desired size given at most `avail` room. */
   measure(f: (props: F, avail: Avail, m: MeasureCtx) => Vec):
-    PartBuilder<P, F, S, Done<C, "size" | "intrinsic" | "body" | "pack" | "fill" | "measure">, K>;
+    PartBuilder<P, F, S, Done<C, "size" | "intrinsic" | "body" | "pack" | "fill" | "measure">, K, L>;
   /** Container: place children in the final rect. */
   arrange(f: (props: F, rect: Rect, kids: ChildInfo[]) => Rect[]):
-    PartBuilder<P, F, S, Done<C, "size" | "intrinsic" | "body" | "pack" | "arrange">, K>;
+    PartBuilder<P, F, S, Done<C, "size" | "intrinsic" | "body" | "pack" | "arrange">, K, L>;
   /** Container: "I fill whatever I'm given" — measure = avail. */
-  fill(): PartBuilder<P, F, S, Done<C, "size" | "intrinsic" | "body" | "pack" | "fill" | "measure">, K>;
+  fill(): PartBuilder<P, F, S, Done<C, "size" | "intrinsic" | "body" | "pack" | "fill" | "measure">, K, L>;
   /** Container: derive measure AND arrange from one packing function — the two
    *  phases cannot desync. Children are measured intrinsic (UNBOUNDED). */
-  pack(f: PackFn<F>): PartBuilder<P, F, S, Done<C, LayoutCap>, K>;
-  /** Composite: derive child elements from props; the expanded children own
-   *  layout, so the layout facets are unavailable. */
-  body(f: (props: F, children: Element[]) => Element[]): PartBuilder<P, F, S, Done<C, LayoutCap>, K>;
+  pack(f: PackFn<F>): PartBuilder<P, F, S, Done<C, LayoutCap>, K, L>;
+  /** Composite: derive child elements from props (+ local state, if declared);
+   *  the expanded children own layout, so the layout facets are unavailable. */
+  body(f: (props: F, children: Element[], local: L) => Element[]): PartBuilder<P, F, S, Done<C, LayoutCap>, K, L>;
 
   /** Resolve visual values from tokens + channels. S is inferred here and
    *  flows into `.render()` — declare style before render. */
   style<S2>(f: (t: Tokens, ch: Record<K | AutoChannel, number> & Channels, props: F) => S2):
-    PartBuilder<P, F, S2, Done<C, "style">, K>;
+    PartBuilder<P, F, S2, Done<C, "style">, K, L>;
   /** Draw, reading only rect + the resolved style. */
-  render(f: (node: GNode<F, K>, p: Painter, style: S) => void): PartBuilder<P, F, S, Done<C, "render" | "style">, K>;
+  render(f: (node: GNode<F, K, L>, p: Painter, style: S) => void): PartBuilder<P, F, S, Done<C, "render" | "style">, K, L>;
 
   /** Append animated channels; their names join `K` (typed `node.ch`). Repeatable. */
   channels<C2 extends Record<string, ChannelSpec<F>>>(c: C2):
-    PartBuilder<P, F, S, Done<C, never>, K | (keyof C2 & string)>;
+    PartBuilder<P, F, S, Done<C, never>, K | (keyof C2 & string), L>;
   /** Append interactors (values: Pan(), Focusable(), or hand-built). Repeatable.
    *  For the common four, the sugar below fixes the prop type from the chain. */
-  on(...is: Interactor<F>[]): PartBuilder<P, F, S, Done<C, never>, K>;
+  on(...is: Interactor<F>[]): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Emit an intent on click/tap. Sugar for `.on(Press(…))` with props typed. */
-  press(to: (node: GNode<F, K>) => Intentish): PartBuilder<P, F, S, Done<C, never>, K>;
+  press(to: (node: GNode<F, K, L>) => Intentish): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Drag along one axis, reporting a 0..1 track fraction. */
-  drag1d(o: { axis: "x" | "y"; pad?: number; to(node: GNode<F, K>, fraction: number): Intentish }):
-    PartBuilder<P, F, S, Done<C, never>, K>;
+  drag1d(o: { axis: "x" | "y"; pad?: number; to(node: GNode<F, K, L>, fraction: number): Intentish }):
+    PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Full gesture; the private state type is INFERRED from `begin`'s return —
    *  no more `Gesture<Props, State>` restating the prop type. */
-  gesture<S2>(spec: GestureSpec<F, S2>): PartBuilder<P, F, S, Done<C, never>, K>;
+  gesture<S2>(spec: GestureSpec<F, S2>): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Keyboard mapping. Routed focus-first, then hover chain, then root. */
-  keys(map: Record<string, (node: GNode<F, K>) => Intentish>): PartBuilder<P, F, S, Done<C, never>, K>;
+  keys(map: Record<string, (node: GNode<F, K, L>) => Intentish>): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Append adornments. Repeatable; earlier adorns run first. */
-  adorn(f: (node: GNode<F, K>) => Element[]): PartBuilder<P, F, S, Done<C, never>, K>;
+  adorn(f: (node: GNode<F, K, L>) => Element[]): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Published world-space anchor points. */
-  anchors(f: (node: GNode<F, K>) => { id: string; pos: Vec; meta?: unknown }[]):
-    PartBuilder<P, F, S, Done<C, "anchors">, K>;
+  anchors(f: (node: GNode<F, K, L>) => { id: string; pos: Vec; meta?: unknown }[]):
+    PartBuilder<P, F, S, Done<C, "anchors">, K, L>;
   /** Custom hit test. */
-  hit(f: (node: GNode<F, K>, p: Vec) => boolean): PartBuilder<P, F, S, Done<C, "hit">, K>;
+  hit(f: (node: GNode<F, K, L>, p: Vec) => boolean): PartBuilder<P, F, S, Done<C, "hit">, K, L>;
 }
 
 /** A part under construction — already a usable part ctor at every step. */
-export type PartBuilder<P, F, S, C extends Cap, K extends string = never> =
-  PartCtor<P, S> & Pick<BuilderMethods<P, F, S, C, K>, C>;
+export type PartBuilder<P, F, S, C extends Cap, K extends string = never, L = unknown> =
+  PartCtor<P, S> & Pick<BuilderMethods<P, F, S, C, K, L>, C>;
 
 type NoProps = Record<string, never>;
 
-/** A fresh builder: no `defaults` until `.props()` names P. */
+/** A fresh builder: no `defaults` until `.props()` names P, no `reduce` until
+ *  `.local()` declares what it reduces. */
 export type PartBuilderStart =
-  PartBuilder<NoProps, NoProps, Record<string, never>, Exclude<Cap, "defaults">, never>;
+  PartBuilder<NoProps, NoProps, Record<string, never>, Exclude<Cap, "defaults" | "reduce">, never>;
 
 /** Runtime: a callable ctor with chain methods; each step re-wraps a new def.
  *  Types above are the guardrails; the data below is a plain PartDef. */
@@ -290,6 +322,8 @@ function builderOf(def: PartDef<any, any>): any {
     },
   });
   b.body = (f: any) => chain({ body: f });
+  b.local = (init: unknown) => chain({ localInit: init });
+  b.reduce = (f: any) => chain({ reduce: f });
   b.style = (f: any) => chain({ style: f });
   b.render = (f: any) => chain({ render: f });
   b.channels = (c: object) => chain({ channels: { ...def.channels, ...c } });

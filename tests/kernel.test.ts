@@ -758,3 +758,186 @@ describe("two-phase layout", () => {
     expect(calls).toBe(12);     // still exactly 3 per pass
   });
 });
+
+// ---- local state + modal capture (M3 item 5, guide §4d/§5e) -----------------
+import { Local, modal } from "../src/gratify";
+
+describe("local state + modal capture", () => {
+  interface Doc { value: string; clicks: number; }
+  type Intent = { kind: "set"; value: string } | { kind: "bump" };
+  type SelIntent = { kind: "toggle" } | { kind: "close" } | { kind: "pick"; value: string };
+
+  const Option = part("ls-option")
+    .props<{ text: string }>()
+    .size(() => v(120, 20))
+    .render(() => {})
+    .press((n) => Local<SelIntent>({ kind: "pick", value: n.props.text }));
+
+  // The acceptance-test widget: open is LOCAL; the Doc only ever sees Set.
+  const Select = part("ls-select")
+    .props<{ value: string; options: string[]; set(v: string): Intent }>()
+    .local({ open: false })
+    .reduce((local, i: SelIntent, node): readonly [{ open: boolean }, unknown?] => {
+      switch (i.kind) {
+        case "toggle": return [{ open: !local.open }];
+        case "close": return [{ open: false }];
+        case "pick": return [{ open: false }, node.props.set(i.value)];
+      }
+    })
+    .size(() => v(140, 24))
+    .render(() => {})
+    .press(() => Local<SelIntent>({ kind: "toggle" }))
+    .adorn((n) => n.local!.open
+      ? [at(
+          modal(
+            Stack("list", {}, n.props.options.map((o) => Option(o, { text: o }))),
+            Local<SelIntent>({ kind: "close" })),
+          v(n.rect.x, n.rect.bottom + 2))]
+      : []);
+
+  // A widget underneath the popup's neighborhood — proves click-away CONSUMES.
+  const Victim = part("ls-victim")
+    .props<Record<string, never>>()
+    .size(() => v(200, 30))
+    .render(() => {})
+    .press(() => ({ kind: "bump" }) as Intent);
+
+  const mkApp = () => withUndo<Doc, Intent>({
+    init: { value: "a", clicks: 0 },
+    update: (d, i) => (i.kind === "set" ? { ...d, value: i.value } : { ...d, clicks: d.clicks + 1 }),
+    view: (d) => Stack("root", { gap: 10, pad: 10 }, [
+      Select("sel", { value: d.value, options: ["a", "b", "c"], set: (value) => ({ kind: "set", value }) }),
+      Victim("victim", {}),
+    ]),
+  });
+  const mkRt = () => new Runtime(null, mkApp(), { headless: true, width: 400, height: 400 });
+
+  const click = (rt: ReturnType<typeof mkRt>, x: number, y: number) => {
+    rt.pointerDown({ x, y }); rt.pointerUp({ x, y }); rt.step(2);
+  };
+  const listOpen = (rt: ReturnType<typeof mkRt>): boolean => {
+    const ar = (rt as unknown as { adornRoot: { children: { key: string; exiting: boolean }[] } | null }).adornRoot;
+    return (ar?.children ?? []).some((c) => c.key === "sel::list" && !c.exiting);
+  };
+
+  it("open is local: Doc never sees it, picking emits ONE app intent, undo never re-opens", () => {
+    const rt = mkRt();
+    rt.step(2);
+    expect(listOpen(rt)).toBe(false);
+
+    click(rt, 80, 22);                                   // the select field
+    expect(listOpen(rt)).toBe(true);
+    expect(rt.doc.past.length).toBe(0);                  // opening wrote NO history
+    expect(rt.doc.present.value).toBe("a");
+
+    click(rt, 30, 66);                                   // option "b" (list at y36; rows 20)
+    expect(rt.doc.present.value).toBe("b");              // exactly one app intent
+    expect(rt.doc.past.length).toBe(1);
+    expect(listOpen(rt)).toBe(false);                    // pick also closed it
+
+    rt.dispatch({ kind: "undo" });
+    rt.step(2);
+    expect(rt.doc.present.value).toBe("a");              // selection undone…
+    expect(listOpen(rt)).toBe(false);                    // …and the dropdown did NOT re-open
+  });
+
+  it("click-away dismisses the modal AND is consumed (nothing underneath fires)", () => {
+    const rt = mkRt();
+    rt.step(2);
+    click(rt, 80, 22);                                   // open
+    expect(listOpen(rt)).toBe(true);
+
+    click(rt, 170, 50);                                  // on Victim, outside the list (x>130)
+    expect(listOpen(rt)).toBe(false);                    // closed…
+    expect(rt.doc.present.clicks).toBe(0);               // …and Victim did NOT fire
+
+    click(rt, 170, 50);                                  // modal gone: Victim is live again
+    expect(rt.doc.present.clicks).toBe(1);
+  });
+
+  it("Escape dismisses the modal", () => {
+    const rt = mkRt();
+    rt.step(2);
+    click(rt, 80, 22);
+    expect(listOpen(rt)).toBe(true);
+    rt.key("Escape");
+    rt.step(2);
+    expect(listOpen(rt)).toBe(false);
+    expect(rt.doc.past.length).toBe(0);
+  });
+
+  it("body sees local; a local change re-expands structure without touching history", () => {
+    type StIntent = { kind: "begin" } | { kind: "commit" };
+    const Show = part("ls-show").props<Record<string, never>>().size(() => v(40, 10))
+      .render(() => {}).press(() => Local<StIntent>({ kind: "begin" }));
+    const Edit = part("ls-edit").props<Record<string, never>>().size(() => v(40, 10))
+      .render(() => {}).press(() => Local<StIntent>({ kind: "commit" }));
+    const Stepper = part("ls-stepper")
+      .props<{ value: number; set(v: number): { kind: "set"; value: number } }>()
+      .local({ draft: null as number | null })
+      .reduce((l, i: StIntent, n): readonly [{ draft: number | null }, unknown?] =>
+        i.kind === "begin"
+          ? [{ draft: n.props.value + 1 }]
+          : [{ draft: null }, l.draft != null ? n.props.set(l.draft) : undefined])
+      .body((_p, _c, l) => [l.draft == null ? Show("show", {}) : Edit("edit", {})]);
+
+    const rt = new Runtime(null, withUndo<{ value: number }, { kind: "set"; value: number }>({
+      init: { value: 5 },
+      update: (_d, i) => ({ value: i.value }),
+      view: (d) => Stack("root", { pad: 10 }, [Stepper("st", { value: d.value, set: (value) => ({ kind: "set", value }) })]),
+    }), { headless: true, width: 200, height: 200 });
+    rt.step(2);
+    expect(rt.root.children[0].children[0].key).toBe("show");
+
+    rt.pointerDown({ x: 15, y: 12 }); rt.pointerUp({ x: 15, y: 12 }); rt.step(2);
+    expect(rt.root.children[0].children[0].key).toBe("edit");   // body re-expanded from local
+    expect(rt.doc.past.length).toBe(0);                          // draft wrote no history
+
+    rt.pointerDown({ x: 15, y: 12 }); rt.pointerUp({ x: 15, y: 12 }); rt.step(2);
+    expect(rt.doc.present.value).toBe(6);                        // commit FORWARDED one app intent
+    expect(rt.doc.past.length).toBe(1);
+    expect(rt.root.children[0].children[0].key).toBe("show");
+  });
+
+  it("a forwarded Local(...) re-enters routing and reaches a HIGHER reducer", () => {
+    type InnerI = { kind: "go" };
+    type OuterI = { kind: "caught" };
+    const Btn = part("ls-btn").props<Record<string, never>>().size(() => v(30, 10))
+      .render(() => {}).press(() => Local<InnerI>({ kind: "go" }));
+    const Inner = part("ls-inner")
+      .props<Record<string, never>>()
+      .local({ n: 0 })
+      .reduce((l, _i: InnerI): readonly [{ n: number }, unknown?] =>
+        [{ n: l.n + 1 }, Local<OuterI>({ kind: "caught" })])
+      .body(() => [Btn("b", {})]);
+    const Outer = part("ls-outer")
+      .props<Record<string, never>>()
+      .local({ caught: false })
+      .reduce((_l, _i: OuterI): readonly [{ caught: boolean }] => [{ caught: true }])
+      .body(() => [Inner("in", {})]);
+
+    const rt = new Runtime<number, never>(null, {
+      init: 0, update: (d) => d,
+      view: () => Stack("root", { pad: 10 }, [Outer("out", {})]),
+    }, { headless: true, width: 200, height: 200 });
+    rt.step(2);
+    rt.pointerDown({ x: 15, y: 12 }); rt.pointerUp({ x: 15, y: 12 }); rt.step(2);
+    const outer = rt.root.children[0];
+    expect((outer.local as { caught: boolean }).caught).toBe(true);
+    expect((outer.children[0].local as { n: number }).n).toBe(1);
+  });
+
+  it("a Local intent with no enclosing reduce dev-warns and is dropped", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const Loose = part("ls-loose").props<Record<string, never>>().size(() => v(30, 10))
+      .render(() => {}).press(() => Local({ kind: "nowhere" }));
+    const rt = new Runtime<number, { kind: string }>(null, {
+      init: 0, update: (d) => d,
+      view: () => Stack("root", { pad: 10 }, [Loose("l", {})]),
+    }, { headless: true, width: 200, height: 200 });
+    rt.step(2);
+    rt.pointerDown({ x: 15, y: 12 }); rt.pointerUp({ x: 15, y: 12 }); rt.step(1);
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+  });
+});

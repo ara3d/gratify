@@ -14,13 +14,13 @@
 
 import { clamp, rect, v, Vec } from "./core";
 import { CanvasPainter, NullPainter, Painter } from "./painter";
-import { Element, Instance, Layer, reconcile } from "./scene";
+import { Element, Instance, Layer, reconcile, walk } from "./scene";
 import { GNode } from "./part";
-import { Anchor, axisFraction, GestureSpec, Interactor, Query } from "./interact";
+import { Anchor, axisFraction, GestureSpec, Interactor, isLocal, Query, unwrapLocal } from "./interact";
 import { themeVersion, tickTheme } from "./theme";
 import { Fx } from "./fx";
 import { EffCache } from "./effective";
-import { AnyDef, expandBodies } from "./compose";
+import { AnyDef, expandBodies, LocalReader } from "./compose";
 import { layoutScene } from "./layout";
 import { animateScene } from "./animate";
 import { renderScene } from "./draw";
@@ -88,6 +88,8 @@ export class Runtime<TDoc, TIntent> {
   private gesture: ActiveGesture | null = null;
   private gestureRoot: Instance | null = null;
   private adornRoot: Instance | null = null;
+  private adornHosts = new Map<string, Instance>();   // adorn-root child key → host instance (routing bridge)
+  private modalInst: Instance | null = null;          // topmost modal adornment, if any
   private panDrag: { pan0: Vec; p0: Vec } | null = null;
   private focus: Instance | null = null;
   private anchorMap = new Map<string, Anchor>();
@@ -104,8 +106,56 @@ export class Runtime<TDoc, TIntent> {
   }
 
   // ---- public --------------------------------------------------------------
-  dispatch = (i: TIntent) => { this.doc = this.app.update(this.doc, i); this.dirty = true; this.wake(); };
+  dispatch = (i: TIntent) => {
+    if (isLocal(i)) {
+      console.warn("gratify: Local(...) intent sent to dispatch() — local intents route from a node; emit them from an interactor instead. Dropped:", unwrapLocal(i));
+      return;
+    }
+    this.doc = this.app.update(this.doc, i); this.dirty = true; this.wake();
+  };
   spawnFx(f: Fx) { this.fx.push(f); this.wake(); }
+
+  // ---- local intent routing (guide §4d) -------------------------------------
+  /** Dispatch from an ORIGINATING instance — the single seam every interactor
+   *  intent flows through. `Local(...)` intents walk up to the nearest
+   *  enclosing part with a `reduce` (crossing from an adornment to its host)
+   *  and never reach the app's `update`; everything else goes to `dispatch`.
+   *  A reducer's forwarded intent re-enters routing ABOVE it, so nested
+   *  composites compose: bare → app update, `Local(...)` → a higher reducer. */
+  private dispatchFrom(origin: Instance | undefined, i: unknown): void {
+    if (i == null) return;
+    if (!isLocal(i)) { this.dispatch(i as TIntent); return; }
+    let cur = origin;
+    while (cur && !this.effs.get(cur).reduce) cur = this.hostParent(cur);
+    if (!cur) {
+      console.warn("gratify: Local(...) intent found no enclosing part with a reduce — dropped:", unwrapLocal(i));
+      return;
+    }
+    const def = this.effs.get(cur);
+    const [next, forward] = def.reduce!(cur.local ?? def.localInit, unwrapLocal(i), this.nodeOf(cur));
+    cur.local = next;
+    this.dirty = true;                 // state clock: re-expand bodies/adorns that read local
+    this.wake();
+    if (forward != null) this.dispatchFrom(this.hostParent(cur), forward);
+  }
+
+  /** Parent for routing purposes: an adornment's logical parent is its HOST,
+   *  not the internal adorn root — a dropdown's list items route to the
+   *  dropdown's reducer. */
+  private hostParent(inst: Instance): Instance | undefined {
+    if (inst.parent && inst.parent === this.adornRoot) return this.adornHosts.get(inst.key);
+    return inst.parent;
+  }
+
+  /** A LocalReader over a retained tree — how `expandBodies` (a pure element
+   *  pre-pass) sees the previous frame's instance-local state by key path. */
+  private localOf(root: Instance | null): LocalReader {
+    return (path) => {
+      let cur: Instance | undefined = root && root.key === path[0] ? root : undefined;
+      for (let i = 1; cur && i < path.length; i++) cur = cur.children.find((c) => c.key === path[i]);
+      return cur?.local;
+    };
+  }
   /** Advance n deterministic frames (headless testing / golden frames). */
   step(n = 1, dt = 1 / 60) { for (let i = 0; i < n; i++) this.tick(dt); }
   stop() { this.stopped = true; }
@@ -151,6 +201,14 @@ export class Runtime<TDoc, TIntent> {
   pointerDown(p: Vec, mods?: Partial<Mods>) {
     Object.assign(this.mods, mods);
     this.pointer = p;
+    // Modal capture (guide §5e, the ONE extra input rule): while a modal
+    // adornment is up, a press outside it dispatches its dismiss intent and is
+    // consumed — click-away closes and does NOT also press what's underneath.
+    if (this.modalInst && !this.withinModal(p)) {
+      this.dispatchFrom(this.modalInst, this.modalInst.el.modal?.dismiss);
+      this.wake();
+      return;
+    }
     const hit = this.topInteractiveHit(p);
     if (hit) {
       const eff = this.effs.get(hit);
@@ -188,7 +246,7 @@ export class Runtime<TDoc, TIntent> {
       const node = this.nodeOf(g.inst);
       if (g.spec.move) g.state = g.spec.move(g.state, node, lp, this.query);
       const live = g.spec.during?.(g.state, node, lp, this.query);
-      if (live != null) this.dispatch(live as TIntent);
+      this.dispatchFrom(g.inst, live);
     } else if (this.panDrag) {
       this.viewport.pan = v(this.panDrag.pan0.x + (p.x - this.panDrag.p0.x), this.panDrag.pan0.y + (p.y - this.panDrag.p0.y));
     } else if (this.press?.drag) {
@@ -206,16 +264,13 @@ export class Runtime<TDoc, TIntent> {
       const lp = this.layerPoint(this.layerOfInst(g.inst), p);
       const out = g.spec.up?.(g.state, this.nodeOf(g.inst), lp, this.query);
       if (out !== undefined && out !== null) {
-        for (const i of Array.isArray(out) ? out : [out]) if (i != null) this.dispatch(i as TIntent);
+        for (const i of Array.isArray(out) ? out : [out]) this.dispatchFrom(g.inst, i);
       }
     }
     // a clean click (no movement) still runs press behaviors, gesture or not
     if (ps && !ps.drag && !ps.moved && this.hitTest(ps.inst, p)) {
       for (const it of this.effs.get(ps.inst).on ?? []) {
-        if (it.kind === "press") {
-          const intent = it.to(this.nodeOf(ps.inst));
-          if (intent != null) this.dispatch(intent as TIntent);
-        }
+        if (it.kind === "press") this.dispatchFrom(ps.inst, it.to(this.nodeOf(ps.inst)));
       }
     }
     this.wake();
@@ -232,6 +287,12 @@ export class Runtime<TDoc, TIntent> {
   }
 
   key(k: string) {
+    // modal capture: Escape dismisses the topmost modal adornment, consumed
+    if (this.modalInst && k === "Escape") {
+      this.dispatchFrom(this.modalInst, this.modalInst.el.modal?.dismiss);
+      this.wake();
+      return;
+    }
     // focus first, then the hover chain, then the root
     const chain: Instance[] = [];
     if (this.focus) chain.push(this.focus);
@@ -241,8 +302,7 @@ export class Runtime<TDoc, TIntent> {
     for (const inst of chain) {
       for (const it of this.effs.get(inst).on ?? []) {
         if (it.kind === "keys" && it.map[k]) {
-          const intent = it.map[k](this.nodeOf(inst));
-          if (intent != null) this.dispatch(intent as TIntent);
+          this.dispatchFrom(inst, it.map[k](this.nodeOf(inst)));
           this.wake();
           return;
         }
@@ -257,7 +317,7 @@ export class Runtime<TDoc, TIntent> {
     // a themeVersion bump (setTheme / extendTheme) may change composite structure
     // via a theme-scope mapBody, so treat it like a dirty view.
     if (themeVersion !== this.themeVer) { this.themeVer = themeVersion; this.dirty = true; }
-    if (this.dirty) { this.root = reconcile(this.root, expandBodies(this.app.view(this.doc))); this.dirty = false; }
+    if (this.dirty) { this.root = reconcile(this.root, expandBodies(this.app.view(this.doc), this.localOf(this.root))); this.dirty = false; }
     const eff = (i: Instance) => this.effs.get(i);
     layoutScene(this.root, dt, eff, this.painter.measure, this.viewW, this.viewH);
     this.publishAnchors();
@@ -314,7 +374,7 @@ export class Runtime<TDoc, TIntent> {
     const els = this.gesture?.spec.view?.(this.gesture.state, this.query) ?? [];
     if (els.length || this.gestureRoot?.children.length || this.gestureRoot?.ghosts.length) {
       const rootEl: Element = { key: "__gestures", part: GESTURE_ROOT, props: {}, children: els, layer: "overlay" };
-      this.gestureRoot = reconcile(this.gestureRoot, expandBodies(rootEl));
+      this.gestureRoot = reconcile(this.gestureRoot, expandBodies(rootEl, this.localOf(this.gestureRoot)));
       layoutScene(this.gestureRoot, dt, eff, this.painter.measure, this.viewW, this.viewH);
     } else {
       this.gestureRoot = null;
@@ -324,11 +384,16 @@ export class Runtime<TDoc, TIntent> {
   // ---- adornments (overlay elements anchored to hosts, guide §9) --------------
   private syncAdornments(dt: number, eff: (i: Instance) => AnyDef) {
     const kids: Element[] = [];
+    this.adornHosts.clear();
     const collect = (inst: Instance) => {
       const part = eff(inst);
       if (part.adorn) {
         // namespace each adornment key under its host so two hosts can't collide
-        for (const el of part.adorn(this.nodeOf(inst))) kids.push({ ...el, key: `${inst.key}::${el.key}` });
+        for (const el of part.adorn(this.nodeOf(inst))) {
+          const key = `${inst.key}::${el.key}`;
+          kids.push({ ...el, key });
+          this.adornHosts.set(key, inst);   // Local intents from the adornment route to the host
+        }
       }
       for (const c of inst.children) collect(c);
     };
@@ -336,11 +401,14 @@ export class Runtime<TDoc, TIntent> {
 
     if (kids.length || this.adornRoot?.children.length || this.adornRoot?.ghosts.length) {
       const rootEl: Element = { key: "__adorn", part: ADORN_ROOT, props: {}, children: kids, layer: "overlay" };
-      this.adornRoot = reconcile(this.adornRoot, expandBodies(rootEl));
+      this.adornRoot = reconcile(this.adornRoot, expandBodies(rootEl, this.localOf(this.adornRoot)));
       layoutScene(this.adornRoot, dt, eff, this.painter.measure, this.viewW, this.viewH);
     } else {
       this.adornRoot = null;
     }
+    // the topmost (last in paint order) LIVE modal adornment owns modal capture
+    this.modalInst = null;
+    if (this.adornRoot) walk(this.adornRoot, (i) => { if (i.el.modal && !i.exiting) this.modalInst = i; });
   }
 
   // ---- node capability record ------------------------------------------------
@@ -348,6 +416,7 @@ export class Runtime<TDoc, TIntent> {
     const lp = this.pointer ? this.layerPoint(this.layerOfInst(inst), this.pointer) : undefined;
     return {
       key: inst.key, props: inst.props, rect: inst.rect, ch: inst.ch, states: inst.states,
+      local: inst.local ?? this.effs.get(inst).localInit,
       pointer: lp,
       spawn: (f) => this.spawnFx(f as Fx),
       anchor: (id) => this.anchorMap.get(id)?.pos,
@@ -375,6 +444,18 @@ export class Runtime<TDoc, TIntent> {
     // keeps its hover and clicks pass through to it.
     if (this.adornRoot) { const h = this.interactiveHit(this.adornRoot, this.pointer); if (h) return h; }
     return this.renderHit(this.root, this.pointer);
+  }
+
+  /** Is the press point inside the topmost modal adornment (its own bounds or
+   *  any descendant's)? Geometric, so decorative interior (padding, labels)
+   *  counts as inside — only a genuine click-away dismisses. */
+  private withinModal(p: Vec): boolean {
+    const m = this.modalInst;
+    if (!m) return false;
+    if (this.hitTest(m, p)) return true;
+    let inside = false;
+    walk(m, (i) => { if (!inside && this.hitTest(i, p)) inside = true; });
+    return inside;
   }
 
   /** Interactive hit, overlay (adornments) first, then main content. */
@@ -414,8 +495,7 @@ export class Runtime<TDoc, TIntent> {
   private dispatchDrag(inst: Instance, drag: Extract<Interactor<unknown>, { kind: "drag1d" }>, p: Vec) {
     const lp = this.layerPoint(this.layerOfInst(inst), p);
     const f = axisFraction(inst.rect, drag.axis, drag.pad ?? 8, lp.x, lp.y);
-    const intent = drag.to(this.nodeOf(inst), f);
-    if (intent != null) this.dispatch(intent as TIntent);
+    this.dispatchFrom(inst, drag.to(this.nodeOf(inst), f));
   }
 
   // ---- ghost pruning + rest detection --------------------------------------------

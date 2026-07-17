@@ -96,8 +96,8 @@ export const mapBody = <P = unknown>(
 ): PartExt<P> =>
   (def) => ({
     ...def,
-    body: (props: P, children: Element[]) =>
-      f(props, children, def.body ? def.body(props, children) : children),
+    body: (props: P, children: Element[], local: unknown) =>
+      f(props, children, def.body ? def.body(props, children, local) : children),
   });
 
 // ---- appending list facets ----------------------------------------------------

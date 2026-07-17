@@ -24,17 +24,28 @@ export function composeDef(el: Element): AnyDef {
   return def;
 }
 
+/** Reads a node's instance-local state by its key path from the root — the
+ *  bridge across the expand→reconcile ordering: locals live on the RETAINED
+ *  tree, so the runtime passes a reader over the previous frame's instances
+ *  (same keys, since reconcile preserves them 1:1). Undefined (fresh node, or
+ *  no reader) falls back to the part's declared `localInit`. */
+export type LocalReader = (path: string[]) => unknown;
+
 /** Expand composites: replace each element's children with its `body` output
  *  (use-site children become the body's input slot), recursively. A depth
- *  guard turns accidental self-recursion into a console error, not a hang. */
-export function expandBodies(el: Element, depth = 0): Element {
+ *  guard turns accidental self-recursion into a console error, not a hang.
+ *  Runs on the state clock only — a `body` may read local state (via the
+ *  reader) but never channels. */
+export function expandBodies(el: Element, getLocal?: LocalReader, path: string[] = [el.key], depth = 0): Element {
   if (depth > 64) {
     console.error(`gratify: body expansion too deep at "${el.key}" — a part likely emits itself`);
     return el;
   }
   const def = composeDef(el);
-  const kids = def.body ? def.body(el.props, el.children ?? []) : el.children;
+  const kids = def.body
+    ? def.body(el.props, el.children ?? [], getLocal?.(path) ?? def.localInit)
+    : el.children;
   return kids?.length
-    ? { ...el, children: kids.map((k) => expandBodies(k, depth + 1)) }
+    ? { ...el, children: kids.map((k) => expandBodies(k, getLocal, [...path, k.key], depth + 1)) }
     : el;
 }
