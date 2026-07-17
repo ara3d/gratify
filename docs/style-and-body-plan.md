@@ -7,8 +7,8 @@ Proposal B shipped on `main` after `adorn` landed (9865fea):
 `SurfaceStyle`, built-ins/widgets migrated) · `3f4183b` B (the `body` facet +
 `mapBody`) · `f38589c` examples (Card, `composites`, widget-board rewrite) ·
 `f7a46f2` S3 (no-`tokens`-in-part-file check) · `dab4e96` gallery rebuild.
-The one unimplemented item: the §5 `borders → border(kind): PartExt` rewrite
-(independent, optional — still a monolith). Note later work superseded the
+The §5 `borders → border(kind): PartExt` rewrite also shipped later (`21e7b91`).
+Note later work superseded the
 authoring surface: two-phase measure/arrange (`docs/measure-arrange-plan.md`)
 and the typestate part **builder** are now the primary form; the curried
 overload and spec-object form documented here still compile. Companion to
