@@ -10,6 +10,41 @@ If this brief disagrees with the code, the code wins.*
 
 ---
 
+## 0. Outcome (2026-07-17) — BUILT; decisions as resolved
+
+Shipped: `local`/`reduce` facets, `Local(...)` intent routing, modal capture,
+`body(props, children, local)`, `examples/dropdown/`, six kernel tests
+(undo-never-reopens, click-away consume, Escape, body re-expansion, forward
+re-routing, no-reducer warn). The open sub-questions of §4 resolved as:
+
+1. **Ordering crux → variant of "carry local by key", with NO new store.**
+   Locals live on the retained `Instance.local` slot (single source of truth,
+   pruned for free when the instance exits). `expandBodies` takes a
+   `LocalReader` — a key-path lookup over the *previous* frame's instance tree
+   (`Runtime.localOf`) — valid because reconcile preserves keys 1:1. `scene.ts`
+   was untouched; the state-clock guarantee holds (expansion still runs only on
+   dirty).
+2. **Marking local intents → a `Local(intent)` wrapper** (value constructor,
+   same register as `Press`/`Hover`). The reducer's intent union is annotated
+   on its `intent` parameter; the builder cannot declare `.reduce` before
+   `.local(init)` (typestate), so the right order is the only order.
+3. **Routing** — every interactor intent flows through one seam,
+   `dispatchFrom(originInstance, intent)`; local intents walk `parent` upward
+   to the nearest `reduce`, and an adornment's logical parent is its HOST
+   (`adornHosts` bridge), so a dropdown's list items reach the dropdown's
+   reducer. No enclosing reduce → `console.warn` + drop.
+4. **Forwarded intents RE-ENTER routing above the reducer** (stricter than the
+   guide's "straight to update"): bare → `update`, `Local(...)`-wrapped → a
+   higher reducer. This makes nested composites compose; a kernel test locks it.
+5. **Modal capture → one runtime rule + one element marker.**
+   `modal(element, dismiss)` marks an adornment; a press outside the topmost
+   live modal (or Escape) dispatches `dismiss` and is consumed. Geometric
+   containment, so decorative interior (padding, labels) counts as inside.
+
+Deferred as own rocks: scoped re-expansion (a local intent currently marks the
+whole view dirty — same clock, just not the minimal subtree), text `EditBox`,
+HTML islands, and keys-routing through the adornment hover chain.
+
 ## 1. What we're building and why it's the next rock
 
 Everything a Gratify app knows lives in one immutable `Doc`, changed only

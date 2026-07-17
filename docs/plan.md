@@ -1,15 +1,16 @@
 # Gratify — High-Level Implementation Plan
 
-*Written 2026-07-13. Status 2026-07-15: **M0, M1, M2 complete; M3 mostly
-complete** — surface-as-part (grid/Pan/Keys), anchors + wire connectors,
-gestures with state/query/overlay-view, impulse channels, viewport layers,
-`GNode.time` + `ambient` for time-based motion, and the **`adorn` facet**
-(overlay elements anchored to a host, applied to any widget via `addAdorn`;
-decorative ones pass through, interactive ones capture clicks). Examples:
-counter, todo, toggles, undo, extensions, keyboard-and-drag, node-editor,
-widget-board, borders, combo-button, magnify, earthquake, adornments.
-Remaining from M3: instance-local state routing + modal popups (dropdowns).
-M4 not started.*
+*Written 2026-07-13. Status 2026-07-17: **M0–M3 complete** — surface-as-part
+(grid/Pan/Keys), anchors + wire connectors, gestures with
+state/query/overlay-view, impulse channels, viewport layers, `GNode.time` +
+`ambient` for time-based motion, the **`adorn` facet** (overlay elements
+anchored to a host, applied to any widget via `addAdorn`; decorative ones pass
+through, interactive ones capture clicks), and **instance-local state** (the
+`local`/`reduce` facets, `Local(...)` intents routed to the nearest enclosing
+reducer, modal input capture via `modal(el, dismiss)` — decisions recorded in
+`local-state-brief.md` §Outcome). Examples: counter, todo, toggles, undo,
+extensions, keyboard-and-drag, node-editor, widget-board, borders,
+combo-button, magnify, earthquake, adornments, dropdown. M4 not started.*
 
 *This plan describes how to get from an empty repository to
 the framework the [README](../README.md) promises. The README is the spec: every
