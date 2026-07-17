@@ -1,9 +1,18 @@
 # Gratify — Style Ergonomics + the Body Facet (AI-generated proposal)
 
 *Written 2026-07-14 by Claude, from a code review of the repo at `28a3960` plus
-the uncommitted `adorn` work. Status: **proposal awaiting Christopher's
-review** — nothing here is implemented. Companion to [`plan.md`](plan.md); if
-the two disagree, `plan.md` and the code win.*
+the then-uncommitted `adorn` work. Status: **EXECUTED** — all of Proposal S and
+Proposal B shipped on `main` after `adorn` landed (9865fea):
+`76dbf36` S1 (curried `part<P>()` inference) · `ae925a6` S2 (style recipes +
+`SurfaceStyle`, built-ins/widgets migrated) · `3f4183b` B (the `body` facet +
+`mapBody`) · `f38589c` examples (Card, `composites`, widget-board rewrite) ·
+`f7a46f2` S3 (no-`tokens`-in-part-file check) · `dab4e96` gallery rebuild.
+The one unimplemented item: the §5 `borders → border(kind): PartExt` rewrite
+(independent, optional — still a monolith). Note later work superseded the
+authoring surface: two-phase measure/arrange (`docs/measure-arrange-plan.md`)
+and the typestate part **builder** are now the primary form; the curried
+overload and spec-object form documented here still compile. Companion to
+[`plan.md`](plan.md); if they disagree, `plan.md` and the code win.*
 
 ---
 
