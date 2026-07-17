@@ -9,7 +9,7 @@ export default defineConfig({
   resolve: {
     alias: { gratify: resolve(__dirname, "src/gratify/index.ts") },
   },
-  server: { port: 5199 },
+  server: { port: Number(process.env.PORT) || 5199 },
   build: {
     outDir: "docs",
     emptyOutDir: false,       // scripts/clean-docs.mjs empties it, keeping *.md
@@ -31,6 +31,7 @@ export default defineConfig({
         "split-pane": resolve(__dirname, "examples/split-pane/index.html"),
         "juice-gallery": resolve(__dirname, "examples/juice-gallery/index.html"),
         adornments: resolve(__dirname, "examples/adornments/index.html"),
+        dropdown: resolve(__dirname, "examples/dropdown/index.html"),
       },
     },
   },
