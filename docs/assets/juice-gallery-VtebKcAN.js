@@ -1,4 +1,4 @@
-import{p as h,P as x,r as b,i as y,v as i,h as w,c as W,D as S,j as f,m as D,d as H,S as q,L as I,R as N}from"./source-panel-cwX9nwkb.js";import{b as R,R as O,P as T,r as m}from"./effects-BGArodll.js";import{C as M}from"./widgets-Bo9jPsTR.js";import{w as A}from"./widgets-L_2qlmzG.js";const X=`// ============================================================================
+import{p as h,P as x,r as b,k as y,v as i,h as w,c as W,D as S,n as f,m as D,d as H,S as q,L as I,R as N}from"./source-panel-CwjQB28X.js";import{b as R,R as O,P as T,r as m}from"./effects-a29NnO1s.js";import{b as M}from"./widgets-CaJ4_Cu6.js";import{w as A}from"./widgets-BJYGvrkn.js";const X=`// ============================================================================
 // Example: juice gallery — a grid of common controls, each wearing a different
 // "juicy" effect. The point is breadth: nine buttons and sliders, nine kinds of
 // delight, and NONE of them needs a line of animation code — every effect is a

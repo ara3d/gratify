@@ -1,4 +1,4 @@
-import{p as a,r as m,a as p,v as r,c as i,b as g,m as x,d as v,P as u,S as y,L as h,e as c}from"./source-panel-cwX9nwkb.js";import{w,B as k,a as d}from"./widgets-Bo9jPsTR.js";const f=`// ============================================================================
+import{p as a,r as m,a as p,v as r,c as i,b as g,m as x,d as v,P as u,S as y,L as h,e as c}from"./source-panel-CwjQB28X.js";import{w,B as k,a as d}from"./widgets-CaJ4_Cu6.js";const f=`// ============================================================================
 // Example: adornments — decoration by composition.
 //
 // An adornment is an overlay element anchored to a host widget: a tooltip, a

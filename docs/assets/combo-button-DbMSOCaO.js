@@ -1,4 +1,4 @@
-import{p as w,m as g,d as f,S as C,L as l,P as y,h,v as u,r as O,c as M,a as T}from"./source-panel-cwX9nwkb.js";import{b as x,R as S}from"./effects-BGArodll.js";const v=`// ============================================================================
+import{p as w,m as g,d as f,S as C,L as l,P as y,h,v as u,r as O,c as M,a as T}from"./source-panel-CwjQB28X.js";import{b as x,R as S}from"./effects-a29NnO1s.js";const v=`// ============================================================================
 // Example: combo button — the faster you click, the juicier it gets.
 //
 // Click it a few times quickly and watch the "heat" build: the button swells,
