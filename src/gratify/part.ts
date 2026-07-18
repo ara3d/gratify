@@ -29,8 +29,9 @@ export interface GNode<P, K extends string = string, L = unknown> {
   states: Set<string>;
   /** Instance-local UI state (the `local`/`reduce` facets, guide §4d): the
    *  part's own private record — dropdown-open, a scrub draft. Changed only by
-   *  `reduce`; reads as the declared initial value until then. */
-  local?: L;
+   *  `reduce`; reads as the declared initial value until then. (Parts that
+   *  never declared `.local()` see `unknown`/undefined here.) */
+  local: L;
   /** Last pointer position (world coords for world-layer parts), if any. */
   pointer?: Vec;
   /** Spawn a transient effect (README §"one-shot juice"). */
@@ -47,10 +48,12 @@ export interface GNode<P, K extends string = string, L = unknown> {
   time?: number;
 }
 
-export interface ChannelSpec<P> {
+export interface ChannelSpec<P, L = unknown> {
   /** Target the value chases, re-derived every frame from the node.
-   *  Omit for impulse channels (decay). */
-  target?(node: GNode<P>): number;
+   *  Omit for impulse channels (decay). May read `node.local` — the bridge
+   *  from discrete local state to continuous motion (a dropdown's chevron
+   *  chasing its open flag). */
+  target?(node: GNode<P, string, L>): number;
   /** Spring (momentum, overshoot) — positions, travel, knobs. */
   spring?: { stiffness: number; damping: number };
   /** Exponential approach rate (no overshoot) — colors, glow. Default 10. */
@@ -116,7 +119,7 @@ export interface PartSpec<P, S = Record<string, unknown>, L = unknown> {
   /** Custom hit test (e.g. distance-to-curve for wires). Default: rect. */
   hit?(node: GNode<P>, p: Vec): boolean;
   /** Extra animated channels beyond the automatic ones. */
-  channels?: Record<string, ChannelSpec<P>>;
+  channels?: Record<string, ChannelSpec<P, L>>;
   /** tokens + channels (+ props) → a flat record of resolved visual values. */
   style?(t: Tokens, ch: Channels, props: P): S;
   /** Draw, reading only rect + the resolved style. */
@@ -267,7 +270,7 @@ interface BuilderMethods<P, F, S, C extends Cap, K extends string, L> {
   render(f: (node: GNode<F, K, L>, p: Painter, style: S) => void): PartBuilder<P, F, S, Done<C, "render" | "style">, K, L>;
 
   /** Append animated channels; their names join `K` (typed `node.ch`). Repeatable. */
-  channels<C2 extends Record<string, ChannelSpec<F>>>(c: C2):
+  channels<C2 extends Record<string, ChannelSpec<F, L>>>(c: C2):
     PartBuilder<P, F, S, Done<C, never>, K | (keyof C2 & string), L>;
   /** Append interactors (values: Pan(), Focusable(), or hand-built). Repeatable.
    *  For the common four, the sugar below fixes the prop type from the chain. */
