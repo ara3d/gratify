@@ -32,6 +32,7 @@ export default defineConfig({
         "juice-gallery": resolve(__dirname, "examples/juice-gallery/index.html"),
         adornments: resolve(__dirname, "examples/adornments/index.html"),
         dropdown: resolve(__dirname, "examples/dropdown/index.html"),
+        "three-transform": resolve(__dirname, "examples/three-transform/index.html"),
       },
     },
   },

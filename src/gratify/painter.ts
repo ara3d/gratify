@@ -57,8 +57,14 @@ export class CanvasPainter implements Painter {
 
   clear(c: Color, w: number, h: number) {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.fillStyle = css(c);
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // Always erase last frame first — a fill alone cannot clear when the bg
+    // token is translucent (alpha < 1), which is how a HUD canvas layered over
+    // a WebGL/3D canvas stays see-through.
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    if (c.a > 0) {
+      this.ctx.fillStyle = css(c);
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
     void w; void h;
   }
   screen(dpr: number) { this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
