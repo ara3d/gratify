@@ -7,7 +7,9 @@
 [![npm](https://img.shields.io/npm/v/gratify.svg)](https://www.npmjs.com/package/gratify)
 [![license](https://img.shields.io/npm/l/gratify.svg)](https://github.com/ara3d/gratify/blob/main/LICENSE)
 
-### ▶ [Try the live demo](https://ara3d.github.io/gratify/) · [Source on GitHub](https://github.com/ara3d/gratify) · [npm](https://www.npmjs.com/package/gratify)
+Inspired by the concept of Juice in games and in particular [Feel](https://feel.moremountains.com/) by [Renaud Forestié](https://reuno.net/) 
+
+### ▶ [Try the live demo](https://ara3d.github.io/gratify/) 
 
 https://github.com/user-attachments/assets/f77ac0bb-bc53-486d-b51c-a19362b6ed0c
 
@@ -333,8 +335,6 @@ and how they map.
 | Theming | context + CSS vars | ResourceDictionary swap | `setTheme` — cross-fades free |
 
 The through-line: where React and WPF grew a *separate subsystem* per row, Gratify answers nearly every row with the same two mechanisms. That's what "composable" means here — not a feature for everything, but a few primitives that combine to cover the table.
-
-
 
 ## Status: Beta
 
