@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Gratify — three-transform</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #0b0d12; }
+    /* Two stacked, full-viewport canvases:
+       #gl  — the Three.js WebGL scene (opaque background layer)
+       #hud — the Gratify tool panels (transparent, composited on top)      */
+    canvas { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; }
+    #gl  { z-index: 0; }
+    #hud { z-index: 1; touch-action: none; }
+    a.back { position: fixed; top: 10px; right: 14px; z-index: 10;
+             color: #828a9c; font: 13px system-ui; text-decoration: none; }
+    a.back:hover { color: #40baff; }
+  </style>
+  <script type="module" crossorigin src="../../assets/three-transform-BwM8giFe.js"></script>
+  <link rel="modulepreload" crossorigin href="../../assets/runtime-BQ2Zsp_3.js">
+  <link rel="modulepreload" crossorigin href="../../assets/widgets-xXDkx298.js">
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <canvas id="hud"></canvas>
+  <a class="back" href="../../index.html">&larr; gallery</a>
+</body>
+</html>

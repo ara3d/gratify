@@ -1,4 +1,4 @@
-import{p as o,m as a,d as i,S as r,L as c,P as l,v as u}from"./source-panel-CwjQB28X.js";const h=`// ============================================================================
+import{p as o,m as a,S as i,L as r,P as c,v as l}from"./runtime-BQ2Zsp_3.js";import{a as u}from"./source-panel-CSqvtNlY.js";const h=`// ============================================================================
 // Example: counter — the "Hello, Gratify" application.
 //
 // What to look for when you run it:
@@ -139,4 +139,4 @@ mount(canvas, {
 
 // (This last line just feeds the source viewer on the right.)
 attachSourcePanel([{ name: "main.ts", code: mainSource }]);
-`;function d(e,n){return n.kind==="increment"?{clickCount:e.clickCount+1}:e}const m=o("button",{size(e,n){const t=n.text(e.label).x;return u(t+28,34)},style(e,n){const t=.2+.3*n.hover+.4*n.press;return{fill:e.mix(e.surface,e.accent,t),cornerRadius:8,lift:2*n.hover-2*n.press,text:e.text}},render(e,n,t){const s=e.rect.raise(t.lift);n.box(s,t.cornerRadius,t.fill),n.label(e.props.label,s.center,t.text,{weight:500})},on:[l(e=>e.props.press)]});function p(e){return r("root",{gap:12,pad:48},[c("message",{text:`Clicked ${e.clickCount} times`,size:15}),m("increment-button",{label:"Click me",press:{kind:"increment"}})])}const f=document.getElementById("c");a(f,{init:{clickCount:0},update:d,view:p});i([{name:"main.ts",code:h}]);
+`;function d(e,n){return n.kind==="increment"?{clickCount:e.clickCount+1}:e}const m=o("button",{size(e,n){const t=n.text(e.label).x;return l(t+28,34)},style(e,n){const t=.2+.3*n.hover+.4*n.press;return{fill:e.mix(e.surface,e.accent,t),cornerRadius:8,lift:2*n.hover-2*n.press,text:e.text}},render(e,n,t){const s=e.rect.raise(t.lift);n.box(s,t.cornerRadius,t.fill),n.label(e.props.label,s.center,t.text,{weight:500})},on:[c(e=>e.props.press)]});function p(e){return i("root",{gap:12,pad:48},[r("message",{text:`Clicked ${e.clickCount} times`,size:15}),m("increment-button",{label:"Click me",press:{kind:"increment"}})])}const f=document.getElementById("c");a(f,{init:{clickCount:0},update:d,view:p});u([{name:"main.ts",code:h}]);
