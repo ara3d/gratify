@@ -311,3 +311,62 @@ describe("Virtual", () => {
     expect(rt.semanticsTree()[0]).toMatchObject({ role: "list", value: 1000 });
   });
 });
+
+// ---- focus model: nearest focusable ancestor, key bubbling, mods -----------------
+import { Focusable } from "../src/gratify";
+
+describe("focus routing for composite views", () => {
+  type D = { log: string[] };
+  type I = { kind: "log"; s: string };
+  const log = (s: string): I => ({ kind: "log", s });
+  const Row = part("fr-row").props<{ i: number }>().size(() => v(100, 20)).render(() => {})
+    .press((n, mods) => log(`row${n.props.i}${mods.shift ? "+shift" : ""}${mods.ctrl ? "+ctrl" : ""}`));
+  const Grid = part("fr-grid").props<Record<string, never>>()
+    .measure(() => v(100, 60))
+    .arrange((_p, r, kids) => kids.map((k, i) => new Rect(r.x, r.y + i * 20, k.size.x, k.size.y)))
+    .render(() => {})
+    .on(Focusable())
+    .keys({ ArrowDown: () => log("grid-down"), a: (_n, m) => log(m.ctrl ? "select-all" : "a") });
+  const mk = (rows = 3) => new Runtime<D, I>(null, {
+    init: { log: [] },
+    update: (d, i) => ({ log: [...d.log, i.s] }),
+    view: () => Stack("root", { gap: 0 }, [Grid("grid", {}, Array.from({ length: rows }, (_, i) => Row(`r${i}`, { i })))]),
+  }, { headless: true, width: 300, height: 300 });
+
+  it("clicking a row focuses the grid (nearest focusable ancestor) and the row's press still fires", () => {
+    const rt = mk();
+    rt.step(2);
+    rt.pointerDown({ x: 50, y: 30 }); rt.pointerUp({ x: 50, y: 30 });
+    expect(rt.focusedKey).toBe("grid");
+    expect(rt.doc.log).toEqual(["row1"]);
+  });
+
+  it("press handlers receive the modifier keys", () => {
+    const rt = mk();
+    rt.step(2);
+    rt.pointerDown({ x: 50, y: 30 }, { shift: true }); rt.pointerUp({ x: 50, y: 30 });
+    rt.pointerDown({ x: 50, y: 50 }, { shift: false, ctrl: true }); rt.pointerUp({ x: 50, y: 50 });
+    expect(rt.doc.log).toEqual(["row1+shift", "row2+ctrl"]);
+  });
+
+  it("keys bubble from the focused part through its ancestors, with the pointer elsewhere; handlers see mods", () => {
+    const rt = mk();
+    rt.step(2);
+    rt.pointerDown({ x: 50, y: 30 }); rt.pointerUp({ x: 50, y: 30 });
+    rt.pointerMove({ x: 250, y: 250 });                     // pointer far from the grid
+    expect(rt.key("ArrowDown")).toBe(true);
+    expect(rt.key("a", { ctrl: true })).toBe(true);
+    expect(rt.doc.log.slice(1)).toEqual(["grid-down", "select-all"]);
+  });
+
+  it("a focused part that leaves the tree releases focus", () => {
+    const rt = mk();
+    rt.step(2);
+    rt.pointerDown({ x: 50, y: 30 }); rt.pointerUp({ x: 50, y: 30 });
+    expect(rt.focusedKey).toBe("grid");
+    // swap the app's view to one without the grid
+    (rt.app as { view: (d: D) => ReturnType<typeof Stack> }).view = () => Stack("root", {}, []);
+    rt.dispatch(log("x")); rt.step(2);
+    expect(rt.focusedKey).toBeNull();
+  });
+});

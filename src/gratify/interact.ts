@@ -70,8 +70,13 @@ export interface GestureSpec<P, S, K extends string = string, L = unknown> {
   view?(s: S, q: Query): Element[];
 }
 
+/** Modifier keys as of the current input event. Press and key handlers
+ *  receive them, so shift-click range selection and ctrl-click toggling are
+ *  ordinary intents, not a second gesture. */
+export interface Mods { shift: boolean; alt: boolean; ctrl: boolean }
+
 export type Interactor<P> =
-  | { kind: "press"; to(node: GNode<P>): Intentish }
+  | { kind: "press"; to(node: GNode<P>, mods: Mods): Intentish }
   | { kind: "hover" }
   | {
       kind: "drag1d";
@@ -81,12 +86,13 @@ export type Interactor<P> =
     }
   | { kind: "gesture"; spec: GestureSpec<P, unknown> }
   | { kind: "pan" }                                    // surface: drag empty space pans, wheel zooms
-  | { kind: "keys"; map: Record<string, (node: GNode<P>) => Intentish> }
+  | { kind: "keys"; map: Record<string, (node: GNode<P>, mods: Mods) => Intentish> }
   | { kind: "focusable" }
   | { kind: "wheel"; to(node: GNode<P>, delta: Vec): Intentish };
 
-/** Emit an intent on click/tap (release inside, below drag threshold). */
-export const Press = <P>(to: (node: GNode<P>) => Intentish): Interactor<P> =>
+/** Emit an intent on click/tap (release inside, below drag threshold). The
+ *  modifier keys held at release arrive as the second argument. */
+export const Press = <P>(to: (node: GNode<P>, mods: Mods) => Intentish): Interactor<P> =>
   ({ kind: "press", to });
 
 /** Maintain the hover tag; nothing else. */
@@ -106,11 +112,15 @@ export const Gesture = <P, S>(spec: GestureSpec<P, S>): Interactor<P> =>
 /** Viewport pan/zoom for the hosting part (typically the surface root). */
 export const Pan = <P>(): Interactor<P> => ({ kind: "pan" });
 
-/** Keyboard mapping. Routed focus-first, then hover chain, then root. */
-export const Keys = <P>(map: Record<string, (node: GNode<P>) => Intentish>): Interactor<P> =>
+/** Keyboard mapping, keyed by KeyboardEvent.key. Routed to the focused part
+ *  first, then up through its ancestors, then the hover chain, then the root.
+ *  Handlers receive the modifier keys, so one map can tell "a" from ctrl+a. */
+export const Keys = <P>(map: Record<string, (node: GNode<P>, mods: Mods) => Intentish>): Interactor<P> =>
   ({ kind: "keys", map });
 
-/** Clicking this part gives it keyboard focus (ch.focus eases 0→1). */
+/** Clicking this part — or anything inside it that is not itself focusable —
+ *  gives it keyboard focus (ch.focus eases 0→1). A grid frame is focusable;
+ *  clicking one of its rows focuses the grid. */
 export const Focusable = <P>(): Interactor<P> => ({ kind: "focusable" });
 
 /** Mouse-wheel / trackpad scroll over this part (or any descendant that does

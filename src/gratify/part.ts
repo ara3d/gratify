@@ -9,7 +9,7 @@ import { Rect, v, Vec } from "./core";
 import { Measure, Painter } from "./painter";
 import { Tokens } from "./theme";
 import type { Element } from "./scene";
-import type { GestureSpec, Intentish, Interactor } from "./interact";
+import type { GestureSpec, Intentish, Interactor, Mods } from "./interact";
 import type { IslandSpec } from "./island";
 import type { SemanticsInfo } from "./semantics";
 
@@ -301,7 +301,7 @@ interface BuilderMethods<P, F, S, C extends Cap, K extends string, L> {
    *  For the common four, the sugar below fixes the prop type from the chain. */
   on(...is: Interactor<F>[]): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Emit an intent on click/tap. Sugar for `.on(Press(…))` with props typed. */
-  press(to: (node: GNode<F, K, L>) => Intentish): PartBuilder<P, F, S, Done<C, never>, K, L>;
+  press(to: (node: GNode<F, K, L>, mods: Mods) => Intentish): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Drag along one axis, reporting a 0..1 track fraction. */
   drag1d(o: { axis: "x" | "y"; pad?: number; to(node: GNode<F, K, L>, fraction: number): Intentish }):
     PartBuilder<P, F, S, Done<C, never>, K, L>;
@@ -309,7 +309,7 @@ interface BuilderMethods<P, F, S, C extends Cap, K extends string, L> {
    *  no more `Gesture<Props, State>` restating the prop type. */
   gesture<S2>(spec: GestureSpec<F, S2, K, L>): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Keyboard mapping. Routed focus-first, then hover chain, then root. */
-  keys(map: Record<string, (node: GNode<F, K, L>) => Intentish>): PartBuilder<P, F, S, Done<C, never>, K, L>;
+  keys(map: Record<string, (node: GNode<F, K, L>, mods: Mods) => Intentish>): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Wheel/trackpad scroll over this part; `delta` in CSS px (y down). */
   wheel(to: (node: GNode<F, K, L>, delta: Vec) => Intentish): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Append adornments. Repeatable; earlier adorns run first. */

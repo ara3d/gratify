@@ -16,7 +16,7 @@ import { clamp, rect, v, Vec } from "./core";
 import { CanvasPainter, NullPainter, Painter } from "./painter";
 import { Element, Instance, Layer, reconcile, walk } from "./scene";
 import { GNode } from "./part";
-import { Anchor, axisFraction, GestureSpec, Interactor, isLocal, Query, unwrapLocal } from "./interact";
+import { Anchor, axisFraction, GestureSpec, Interactor, isLocal, Mods, Query, unwrapLocal } from "./interact";
 import { themeVersion, tickTheme } from "./theme";
 import { Fx } from "./fx";
 import { EffCache } from "./effective";
@@ -51,7 +51,7 @@ export interface RuntimeOpts {
   height?: number;
 }
 
-type Mods = { shift: boolean; alt: boolean; ctrl: boolean };
+// (Mods lives in interact.ts — press and key handlers receive it.)
 
 interface PressState {
   inst: Instance;
@@ -245,7 +245,11 @@ export class Runtime<TDoc, TIntent> {
       }
       this.press = { inst: hit, p0: p, moved: false, drag };
       if (drag) this.dispatchDrag(hit, drag, p);
-      if (eff.on!.some((i) => i.kind === "focusable")) this.focus = hit;
+      // focus goes to the nearest Focusable() self-or-ancestor of the hit (a
+      // row click focuses its grid); a gesture/drag on an unfocusable part
+      // leaves the current focus alone.
+      const focusable = this.nearestFocusable(hit);
+      if (focusable) this.focus = focusable;
       else if (!this.gesture && !drag) this.focus = null;
     } else {
       this.focus = null;
@@ -287,7 +291,7 @@ export class Runtime<TDoc, TIntent> {
     // a clean click (no movement) still runs press behaviors, gesture or not
     if (ps && !ps.drag && !ps.moved && this.hitTest(ps.inst, p)) {
       for (const it of this.effs.get(ps.inst).on ?? []) {
-        if (it.kind === "press") this.dispatchFrom(ps.inst, it.to(this.nodeOf(ps.inst)));
+        if (it.kind === "press") this.dispatchFrom(ps.inst, it.to(this.nodeOf(ps.inst), this.mods));
       }
     }
     this.wake();
@@ -338,16 +342,24 @@ export class Runtime<TDoc, TIntent> {
       return true;
     }
     // The focused part goes first: its own keys map wins; otherwise Enter and
-    // Space activate it (route to its press behaviors); Escape releases focus.
+    // Space activate it (route to its press behaviors); then the key bubbles
+    // up through the focused part's ancestors (a grid's arrow keys serve a
+    // focused row); Escape releases focus.
     let focusCleared = false;
+    const tried = new Set<Instance>();
     if (this.focus) {
       if (this.tryKeys(this.focus, k)) return true;
+      tried.add(this.focus);
       if (k === "Enter" || k === " ") {
         let fired = false;
         for (const it of this.effs.get(this.focus).on ?? []) {
-          if (it.kind === "press") { this.dispatchFrom(this.focus, it.to(this.nodeOf(this.focus))); fired = true; }
+          if (it.kind === "press") { this.dispatchFrom(this.focus, it.to(this.nodeOf(this.focus), this.mods)); fired = true; }
         }
         if (fired) { this.wake(); return true; }
+      }
+      for (let a = this.hostParent(this.focus); a; a = this.hostParent(a)) {
+        tried.add(a);
+        if (this.tryKeys(a, k)) return true;
       }
       // Escape releases focus but KEEPS ROUTING: apps use root-level Escape
       // maps (dismiss palettes/overlays) that must still fire on the same
@@ -361,16 +373,24 @@ export class Runtime<TDoc, TIntent> {
     while (h) { chain.push(h); h = h.parent ?? null; }
     if (!chain.includes(this.root)) chain.push(this.root);
     for (const inst of chain) {
-      if (inst !== this.focus && this.tryKeys(inst, k)) return true;
+      if (!tried.has(inst) && this.tryKeys(inst, k)) return true;
     }
     return focusCleared;
+  }
+
+  /** The nearest Focusable() self-or-ancestor (crossing adornment → host). */
+  private nearestFocusable(inst: Instance): Instance | null {
+    for (let cur: Instance | undefined = inst; cur; cur = this.hostParent(cur)) {
+      if (this.effs.get(cur).on?.some((i) => i.kind === "focusable")) return cur;
+    }
+    return null;
   }
 
   /** Run the first matching `keys` interactor on one instance. */
   private tryKeys(inst: Instance, k: string): boolean {
     for (const it of this.effs.get(inst).on ?? []) {
       if (it.kind === "keys" && it.map[k]) {
-        this.dispatchFrom(inst, it.map[k](this.nodeOf(inst)));
+        this.dispatchFrom(inst, it.map[k](this.nodeOf(inst), this.mods));
         this.wake();
         return true;
       }
@@ -413,7 +433,11 @@ export class Runtime<TDoc, TIntent> {
     // a themeVersion bump (setTheme / extendTheme) may change composite structure
     // via a theme-scope mapBody, so treat it like a dirty view.
     if (themeVersion !== this.themeVer) { this.themeVer = themeVersion; this.dirty = true; }
-    if (this.dirty) { this.root = reconcile(this.root, expandBodies(this.app.view(this.doc), this.retainedOf(this.root))); this.dirty = false; }
+    if (this.dirty) {
+      this.root = reconcile(this.root, expandBodies(this.app.view(this.doc), this.retainedOf(this.root)));
+      this.dirty = false;
+      if (this.focus?.exiting) this.focus = null;   // a focused part that left the tree releases focus
+    }
     const eff = (i: Instance) => this.effs.get(i);
     // a composite arranged at a new size may build different structure from
     // it (a virtualized list's rows), so that is a state-clock event too.
