@@ -136,8 +136,13 @@ export interface PartSpec<P, S = Record<string, unknown>, L = unknown> {
    *  function of state; motion stays in channels. `children` are the use-site
    *  children: place them where the composite wants its content slot. A part
    *  without `body` behaves exactly as before. Wrap with `mapBody`. Parts that
-   *  declared local state receive it as the third argument. */
-  body?(props: P, children: Element[], local: L): Element[];
+   *  declared local state receive it as the third argument. `size` is the
+   *  composite's own arranged size as of the last layout (zero before the
+   *  first): the seam for size-dependent structure such as a virtualized list
+   *  that builds only the rows its viewport can show. The runtime re-expands
+   *  whenever a composite's arranged size changes, so structure that depends
+   *  on `size` is one frame behind a resize, never stale. */
+  body?(props: P, children: Element[], local: L, size: Vec): Element[];
   /** Initial instance-local state (guide §4d). Declaring it is what makes
    *  `reduce` meaningful; `body`/`adorn`/channel targets then see `local`. */
   localInit?: L;
@@ -277,9 +282,10 @@ interface BuilderMethods<P, F, S, C extends Cap, K extends string, L> {
   /** Container: derive measure AND arrange from one packing function — the two
    *  phases cannot desync. Children are measured intrinsic (UNBOUNDED). */
   pack(f: PackFn<F>): PartBuilder<P, F, S, Done<C, LayoutCap>, K, L>;
-  /** Composite: derive child elements from props (+ local state, if declared);
-   *  the expanded children own layout, so the layout facets are unavailable. */
-  body(f: (props: F, children: Element[], local: L) => Element[]): PartBuilder<P, F, S, Done<C, LayoutCap>, K, L>;
+  /** Composite: derive child elements from props (+ local state, if declared,
+   *  + the composite's last arranged size); the expanded children own layout,
+   *  so the layout facets are unavailable. */
+  body(f: (props: F, children: Element[], local: L, size: Vec) => Element[]): PartBuilder<P, F, S, Done<C, LayoutCap>, K, L>;
 
   /** Resolve visual values from tokens + channels. S is inferred here and
    *  flows into `.render()` — declare style before render. */

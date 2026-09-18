@@ -74,18 +74,24 @@ class MeasureMemo {
   }
 }
 
-function arrangeInst(inst: Instance, target: Rect, memo: MeasureMemo, eff: Eff) {
-  inst.target = target;
+/** Per-pass outcome flags. `resized` — some composite (a part with `body`)
+ *  was arranged at a different size than last pass, so its structure, which
+ *  may depend on that size, needs re-expanding on the state clock. */
+interface PassInfo { resized: boolean }
+
+function arrangeInst(inst: Instance, target: Rect, memo: MeasureMemo, eff: Eff, info: PassInfo) {
   const part = eff(inst);
+  if (part.body && (inst.target.w !== target.w || inst.target.h !== target.h)) info.resized = true;
+  inst.target = target;
   if (part.arrange && inst.children.length) {
     const kids = inst.children.map((c) => ({ key: c.key, size: memo.sizeOf(c), props: c.props, pos: c.el.pos }));
     const rects = part.arrange(inst.props, target, kids);
-    inst.children.forEach((c, i) => arrangeInst(c, rects[i], memo, eff));
+    inst.children.forEach((c, i) => arrangeInst(c, rects[i], memo, eff, info));
   } else {
     // default arrange: each child at the node's origin at its desired size.
     for (const c of inst.children) {
       const s = memo.sizeOf(c);
-      arrangeInst(c, new Rect(target.x, target.y, s.x, s.y), memo, eff);
+      arrangeInst(c, new Rect(target.x, target.y, s.x, s.y), memo, eff, info);
     }
   }
 }
@@ -116,10 +122,14 @@ function stepRects(inst: Instance, dt: number, snap: boolean) {
 /** One full layout pass over a tree: measure from the viewport down, arrange
  *  into the final rects, then step the channels that make it glide.
  *  `snapPos` pins positions to targets instead of springing — for overlay
- *  trees whose targets are computed from already-animated host rects. */
-export function layoutScene(root: Instance, dt: number, eff: Eff, m: Measure, viewW: number, viewH: number, snapPos = false) {
+ *  trees whose targets are computed from already-animated host rects.
+ *  Returns true when a composite's arranged size changed (its `body` may
+ *  depend on it — the caller re-expands on the next state tick). */
+export function layoutScene(root: Instance, dt: number, eff: Eff, m: Measure, viewW: number, viewH: number, snapPos = false): boolean {
   const memo = new MeasureMemo(eff, m);
+  const info: PassInfo = { resized: false };
   const s = memo.measure(root, v(viewW, viewH));      // PASS 1: measure
-  arrangeInst(root, new Rect(0, 0, Math.max(s.x, viewW), Math.max(s.y, viewH)), memo, eff);   // PASS 2: arrange
+  arrangeInst(root, new Rect(0, 0, Math.max(s.x, viewW), Math.max(s.y, viewH)), memo, eff, info);   // PASS 2: arrange
   stepRects(root, dt, snapPos);                       // channels consume arrange targets
+  return info.resized;
 }

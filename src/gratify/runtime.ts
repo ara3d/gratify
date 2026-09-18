@@ -20,7 +20,7 @@ import { Anchor, axisFraction, GestureSpec, Interactor, isLocal, Query, unwrapLo
 import { themeVersion, tickTheme } from "./theme";
 import { Fx } from "./fx";
 import { EffCache } from "./effective";
-import { AnyDef, expandBodies, LocalReader } from "./compose";
+import { AnyDef, expandBodies, RetainedReader } from "./compose";
 import { islandCss, type IslandSpec } from "./island";
 import type { SemanticsNode } from "./semantics";
 import { layoutScene } from "./layout";
@@ -159,13 +159,14 @@ export class Runtime<TDoc, TIntent> {
     return inst.parent;
   }
 
-  /** A LocalReader over a retained tree — how `expandBodies` (a pure element
-   *  pre-pass) sees the previous frame's instance-local state by key path. */
-  private localOf(root: Instance | null): LocalReader {
+  /** A RetainedReader over a retained tree — how `expandBodies` (a pure element
+   *  pre-pass) sees the previous frame's instance-local state and arranged
+   *  size by key path. */
+  private retainedOf(root: Instance | null): RetainedReader {
     return (path) => {
       let cur: Instance | undefined = root && root.key === path[0] ? root : undefined;
       for (let i = 1; cur && i < path.length; i++) cur = cur.children.find((c) => c.key === path[i]);
-      return cur?.local;
+      return cur && { local: cur.local, size: v(cur.target.w, cur.target.h) };
     };
   }
   /** Advance n deterministic frames (headless testing / golden frames). */
@@ -412,9 +413,11 @@ export class Runtime<TDoc, TIntent> {
     // a themeVersion bump (setTheme / extendTheme) may change composite structure
     // via a theme-scope mapBody, so treat it like a dirty view.
     if (themeVersion !== this.themeVer) { this.themeVer = themeVersion; this.dirty = true; }
-    if (this.dirty) { this.root = reconcile(this.root, expandBodies(this.app.view(this.doc), this.localOf(this.root))); this.dirty = false; }
+    if (this.dirty) { this.root = reconcile(this.root, expandBodies(this.app.view(this.doc), this.retainedOf(this.root))); this.dirty = false; }
     const eff = (i: Instance) => this.effs.get(i);
-    layoutScene(this.root, dt, eff, this.painter.measure, this.viewW, this.viewH);
+    // a composite arranged at a new size may build different structure from
+    // it (a virtualized list's rows), so that is a state-clock event too.
+    if (layoutScene(this.root, dt, eff, this.painter.measure, this.viewW, this.viewH)) this.dirty = true;
     this.publishAnchors();
     this.syncGestureView(dt, eff);
     const env = {
@@ -470,7 +473,7 @@ export class Runtime<TDoc, TIntent> {
     const els = this.gesture?.spec.view?.(this.gesture.state, this.query) ?? [];
     if (els.length || this.gestureRoot?.children.length || this.gestureRoot?.ghosts.length) {
       const rootEl: Element = { key: "__gestures", part: GESTURE_ROOT, props: {}, children: els, layer: "overlay" };
-      this.gestureRoot = reconcile(this.gestureRoot, expandBodies(rootEl, this.localOf(this.gestureRoot)));
+      this.gestureRoot = reconcile(this.gestureRoot, expandBodies(rootEl, this.retainedOf(this.gestureRoot)));
       layoutScene(this.gestureRoot, dt, eff, this.painter.measure, this.viewW, this.viewH, true);
     } else {
       this.gestureRoot = null;
@@ -501,7 +504,7 @@ export class Runtime<TDoc, TIntent> {
 
     if (kids.length || this.adornRoot?.children.length || this.adornRoot?.ghosts.length) {
       const rootEl: Element = { key: "__adorn", part: ADORN_ROOT, props: {}, children: kids, layer: "overlay" };
-      this.adornRoot = reconcile(this.adornRoot, expandBodies(rootEl, this.localOf(this.adornRoot)));
+      this.adornRoot = reconcile(this.adornRoot, expandBodies(rootEl, this.retainedOf(this.adornRoot)));
       layoutScene(this.adornRoot, dt, eff, this.painter.measure, this.viewW, this.viewH, true);
     } else {
       this.adornRoot = null;

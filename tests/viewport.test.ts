@@ -135,3 +135,39 @@ describe("pin(element)", () => {
     expect(y).toBeLessThan(100);
   });
 });
+
+// ---- size-dependent bodies ----------------------------------------------------
+describe("body(size)", () => {
+  type D = { h: number };
+  type I = { kind: "size"; h: number };
+  const Cell = part("bs-cell").props<Record<string, never>>().size(() => v(50, 20)).render(() => {});
+  // builds as many rows as its arranged height can show
+  let expansions = 0;
+  const Rows = part("bs-rows").props<Record<string, never>>()
+    .body((_p, _kids, _l, size) => {
+      expansions++;
+      return Array.from({ length: Math.floor(size.y / 20) }, (_, i) => Cell(`r${i}`, {}));
+    });
+  const Box = part("bs-box").props<{ h: number }>()
+    .measure((p) => v(50, p.h))
+    .arrange((_p, r, kids) => kids.map(() => new Rect(r.x, r.y, r.w, r.h)));
+  const mk = () => new Runtime<D, I>(null, {
+    init: { h: 100 },
+    update: (_d, i) => ({ h: i.h }),
+    view: (d) => Stack("root", { gap: 0 }, [Box("box", { h: d.h }, [Rows("rows", {})])]),
+  }, { headless: true, width: 200, height: 400 });
+
+  it("sees its arranged size one frame after layout, and again after a resize", () => {
+    const rt = mk();
+    expect(rt.root.children[0].children[0].children.length).toBe(0);    // before any layout: size is zero
+    rt.step(2);
+    expect(rt.root.children[0].children[0].children.length).toBe(5);    // 100 / 20
+    rt.dispatch({ kind: "size", h: 200 });
+    rt.step(2);
+    expect(rt.root.children[0].children[0].children.length).toBe(10);
+    const seen = expansions;
+    rt.step(300);
+    expect(expansions).toBe(seen);                          // no expand loop once the size is stable
+    expect(rt.animating).toBe(false);
+  });
+});

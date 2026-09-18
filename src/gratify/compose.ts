@@ -9,6 +9,7 @@
 // (or a theme bump), O(tree) — the same class as `view` itself.
 // ============================================================================
 
+import { v, Vec } from "./core";
 import { PartDef } from "./part";
 import { Element } from "./scene";
 import { activeThemeExts } from "./theme";
@@ -24,28 +25,37 @@ export function composeDef(el: Element): AnyDef {
   return def;
 }
 
-/** Reads a node's instance-local state by its key path from the root — the
- *  bridge across the expand→reconcile ordering: locals live on the RETAINED
- *  tree, so the runtime passes a reader over the previous frame's instances
- *  (same keys, since reconcile preserves them 1:1). Undefined (fresh node, or
- *  no reader) falls back to the part's declared `localInit`. */
-export type LocalReader = (path: string[]) => unknown;
+/** What a `body` may know about its own retained instance: the instance-local
+ *  state (unset = the part's `localInit`) and the size layout last gave it. */
+export interface Retained {
+  local: unknown;
+  size: Vec;
+}
+
+/** Reads a node's retained state by its key path from the root — the bridge
+ *  across the expand→reconcile ordering: locals and layout results live on
+ *  the RETAINED tree, so the runtime passes a reader over the previous frame's
+ *  instances (same keys, since reconcile preserves them 1:1). Undefined (fresh
+ *  node, or no reader) means `localInit` and a zero size. */
+export type RetainedReader = (path: string[]) => Retained | undefined;
 
 /** Expand composites: replace each element's children with its `body` output
  *  (use-site children become the body's input slot), recursively. A depth
  *  guard turns accidental self-recursion into a console error, not a hang.
- *  Runs on the state clock only — a `body` may read local state (via the
- *  reader) but never channels. */
-export function expandBodies(el: Element, getLocal?: LocalReader, path: string[] = [el.key], depth = 0): Element {
+ *  Runs on the state clock only — a `body` may read local state and its last
+ *  size (via the reader) but never channels. */
+export function expandBodies(el: Element, retained?: RetainedReader, path: string[] = [el.key], depth = 0): Element {
   if (depth > 64) {
     console.error(`gratify: body expansion too deep at "${el.key}" — a part likely emits itself`);
     return el;
   }
   const def = composeDef(el);
-  const kids = def.body
-    ? def.body(el.props, el.children ?? [], getLocal?.(path) ?? def.localInit)
-    : el.children;
+  let kids = el.children;
+  if (def.body) {
+    const r = retained?.(path);
+    kids = def.body(el.props, el.children ?? [], r?.local ?? def.localInit, r?.size ?? v(0, 0));
+  }
   return kids?.length
-    ? { ...el, children: kids.map((k) => expandBodies(k, getLocal, [...path, k.key], depth + 1)) }
+    ? { ...el, children: kids.map((k) => expandBodies(k, retained, [...path, k.key], depth + 1)) }
     : el;
 }
