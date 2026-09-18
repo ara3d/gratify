@@ -25,6 +25,11 @@ export interface Painter {
   label(s: string, at: Vec, color: Color, o?: LabelOpts): void;
   dot(p: Vec, r: number, c: Color): void;
   ring(p: Vec, r: number, c: Color, lw?: number): void;
+  /** Stroked circular arc from angle `from` to `to` (radians, clockwise on
+   *  screen, 0 = right). Progress rings, cooldown wipes, gauges. */
+  arc(p: Vec, r: number, from: number, to: number, c: Color, lw?: number): void;
+  /** Closed polygon through `pts` — chevrons, stars, skewed sheen bands. */
+  poly(pts: Vec[], fill: Color, stroke?: Color, lw?: number): void;
   line(a: Vec, b: Vec, c: Color, lw?: number): void;
   glow(c: Color, blur: number, draw: () => void): void;
   push(): void;
@@ -147,12 +152,28 @@ export class CanvasPainter implements Painter {
     c.beginPath(); c.arc(p.x, p.y, Math.max(0.1, r), 0, 7);
     c.strokeStyle = css(col); c.lineWidth = lw; c.stroke();
   }
+  arc(p: Vec, r: number, from: number, to: number, col: Color, lw = 2) {
+    if (to <= from) return;
+    const c = this.ctx;
+    c.beginPath(); c.arc(p.x, p.y, Math.max(0.1, r), from, to);
+    c.strokeStyle = css(col); c.lineWidth = lw; c.lineCap = "round"; c.stroke();
+    c.lineCap = "butt";
+  }
+  poly(pts: Vec[], fill: Color, stroke?: Color, lw = 1) {
+    if (pts.length < 2) return;
+    const c = this.ctx;
+    c.beginPath(); c.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
+    c.closePath();
+    if (fill.a > 0) { c.fillStyle = css(fill); c.fill(); }
+    if (stroke) { c.strokeStyle = css(stroke); c.lineWidth = lw; c.lineJoin = "round"; c.stroke(); }
+  }
 }
 
 /** Headless painter: draws nothing, measures approximately. For tests. */
 export class NullPainter implements Painter {
   measure: Measure = { text: (s, size = 13) => ({ x: s.length * size * 0.55, y: size * 1.3 }) };
-  clear() {} box() {} label() {} dot() {} ring() {} line() {} wire() {}
+  clear() {} box() {} label() {} dot() {} ring() {} arc() {} poly() {} line() {} wire() {}
   clip(_r: Rect) {}
   glow(_c: Color, _b: number, draw: () => void) { draw(); }
   push() {} pop() {} alpha() {} translate() {} scaleAt() {} screen() {} view() {}
