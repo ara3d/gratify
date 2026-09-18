@@ -42,6 +42,7 @@ export default defineConfig({
         workbench: resolve(__dirname, "examples/workbench/index.html"),
         attention: resolve(__dirname, "examples/attention/index.html"),
         hud: resolve(__dirname, "examples/hud/index.html"),
+        "title-screen": resolve(__dirname, "examples/title-screen/index.html"),
       },
     },
   },
