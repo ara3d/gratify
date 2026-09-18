@@ -36,7 +36,7 @@ style(tokens, ch, props) --> S  --render-->  pixels
 6. Namespace custom channels: `"fx/sheen"` not `"sheen"` (share node with hover/press/enter/exit).
 7. Render reads `node.rect` + resolved style only. Logic stay out of paint.
 8. Prefer pure `update`. Mutate Doc break `withUndo`.
-9. Text input, modal popups (dropdowns), instance-local state — **not built yet**. Don't invent APIs for them; skip or stub outside framework. (Adornments ARE built — see below.)
+9. Text input (use a DOM `island`) and per-pane cameras (nested viewports — the runtime has ONE pan/zoom) — **not built yet**. Don't invent APIs for them. Built: adornments, local state + modal popups, scrolling/virtualized data views (see Built-ins).
 10. **House form: the builder** — `part("name").props<Props>().defaults({ gap: 8 }).measure(…).arrange(…).style(…).render(…)`. Never name a style interface — `S` infers from `.style()`'s return and flows into `.render()`. Rules the types enforce: `.props()`/`.defaults()` first; `.size()`/`.intrinsic(w,h)` (leaf) vs `.measure()`/`.arrange()`/`.fill()`/`.pack()` (container) vs `.body()` (composite) mutually exclusive; `.style()` before `.render()`. `.defaults()` makes those keys non-optional in facets (write `p.gap`, never `p.gap ?? 8`). `.pack(f)` = one packing function drives measure AND arrange (cannot desync). Every prefix is already a callable part; no `.build()`. Derive with `extendPart("new-name", Base).style(…)`. Spec-object forms `part<P>()("name", spec)` / `part<P,S>("name", spec)` still compile.
     - **Interactor sugar**: prefer `.press(n => intent)`, `.drag1d({ axis, to })`, `.gesture({ begin, during, up })`, `.keys({ Delete: n => intent })` over `.on(Gesture<P,S>(…))` — the chain fixes the prop type and `.gesture`'s private state infers from `begin`'s return; never restate `<Props, State>`. `.on(…)` remains for Pan()/Focusable()/prebuilt values.
     - **Channel names**: `.channels({ "fx/sheen": … })` feeds `node.ch.` autocomplete (declared + auto `hover/press/drag/focus/enter/exit`). Extensions are typed: `PartExt<P>`, `PropsOf<typeof Part>`; `derivePart` types inline `mapStyle`/`addOn` callbacks against the base's props.
@@ -76,7 +76,9 @@ Undo: wrap whole app — `mount(canvas, withUndo({ init, update, view }))`. Emit
 | `on` | interactor list |
 | `anchors` | named world points for wires |
 | `hit` | custom hit (wires = curve distance) |
+| `clip` | `.clip()`: mask paint AND hit-testing of the subtree to the part's rect (scroll viewports) |
 | `adorn` | overlay elements anchored to host (tooltips/badges/grips); runs each frame, may read channels |
+| `body(props, children, local, size)` | `size` = the composite's last arranged size; the runtime re-expands when it changes (size-dependent structure, e.g. windowed rows) |
 
 Auto channels: `hover`, `press`, `drag`, `focus`, `enter`, `exit`, layout pos/size. Impulse: declare `decay`, call `node.kick("name")`.
 
@@ -138,6 +140,12 @@ on: [
 
 Layers: `"world" | "overlay" | "screen"` — pan/zoom aware.
 
+Element helpers: `at(el, pos)` position · `pin(el)` driven placement (no springs, no enter/exit ghosts — scrolled rows, thumbs) · `grow(el, weight?)` absorb Stack/Row main-axis slack (flex-grow) · `modal(el, dismiss)` · `tier(el, n)`.
+
+Data views: `Virtual({ count, rowHeight, row(i), reveal?, overscan? })` — builds only visible rows, scroll is instance-local, scrollbar built in, `reveal` keeps a row in view until the user scrolls. `Wheel((n, delta) => intent)` / `.wheel()` — routed to the nearest wheel-taking ancestor of the hit, else Pan() zooms. `fitText(measure, text, maxW, size)` — ellipsis fitting. Scroll math in `scroll.ts` (pure). `.fill()` hands avail to its children (nested fills see the viewport).
+
+Input routing: `Press((n, mods) => …)` / `Keys({ k: (n, mods) => … })` get modifier keys (shift/ctrl selection). Focus goes to the nearest `Focusable()` self-or-ancestor of a click (rows focus their grid); keys route focused-first, then UP its ancestors, then hover chain, then root. Keyboard cursor intents should be RELATIVE (`moveCursor(by)`) — props refresh once per frame, so absolute `cursor + 1` collapses under key repeat.
+
 ## Commands
 
 ```bash
@@ -163,6 +171,12 @@ npm run check    # boundary + tsc
 | `juice-gallery` | 3×3 grid: nine buttons/sliders, one juicy effect each (squash/pop/wobble/magnet/confetti/spring/comet/elastic/rainbow) via channels + particles |
 | `widget-board` | 15 Kea-style controls (slider/range/angle/arc/xy/box2d/box3d/color/gradient/…) on a `Pan()` surface |
 | `adornments` | tooltip/badge/close layered onto plain cards via `addAdorn`; overlay layer, enter/exit, interactive |
+| `dropdown` | local state + modal popup; draft field committing one intent |
+| `split-pane` | shared `Split`/`Pane` layout parts, Flow re-wrap |
+| `data-grid` | `Virtual` + `clip` + `Wheel` + `pin`: 10k rows, sort, column grips, shift/ctrl select, relative cursor keys (`shared/grid.ts`, `grid-math.ts`) |
+| `tree-view` | virtualized tree, springing chevrons, →/← idiom, `reveal` jump (`shared/tree.ts`, `tree-math.ts`) |
+| `schema-graph` | multi-port nodes, FK wires, marquee gesture, layered auto-layout, minimap + Dock (`shared/marquee.ts`, `graph-layout.ts`, `minimap.ts`) |
+| `workbench` | tree + grid + graph pane in Splits; one selection fact; per-pane camera = extension point |
 
 Adornments: `adorn(node) → Element[]` on the overlay layer, positioned with `at(el, worldPos)`; interactive ones (with `on`) capture clicks, decorative ones (tooltip/badge) pass through. Append to any widget with `addAdorn(fn)`.
 
@@ -172,8 +186,8 @@ Copy pattern from nearest example. Prefer `examples/shared/widgets` for stock Bu
 
 **Do:** pure Doc/Intent; keyed Elements; channel blends; wrap with `map*`/`add*`; public barrel imports; `step()` tests for kernel; follow existing example shape.
 
-**Don't:** CSS/DOM widgets; `animate()` timelines; fork third-party parts (wrap instead); put draft/popup in Doc (local state not ready — keep ephemeral out of undoable Doc); import examples from package; grow god Runtime special-cases (surface = part facets).
+**Don't:** CSS/DOM widgets; `animate()` timelines; fork third-party parts (wrap instead); put draft/popup/scroll in Doc (use `.local()` — keep ephemeral out of undoable Doc); import examples from package; grow god Runtime special-cases (surface = part facets); let a data part sort/filter/flatten (the app owns derived state, the part renders `rowAt`/`keyAt` or flat rows).
 
 ## Source map
 
-`src/gratify/`: `core/` anim math · `scene` reconcile · `part` · `interact` · `extend` · `theme` · `runtime`/`mount` · `painter` · `middleware` · `containers`/`label`. Spec = `README.md`. Roadmap = `docs/plan.md`.
+`src/gratify/`: `core/` anim math · `scene` reconcile · `part` · `interact` · `extend` · `theme` · `runtime`/`mount` · `painter` · `middleware` · `containers`/`label` · `scroll`/`virtual` data views. Spec = `README.md`. Roadmap = `docs/plan.md`. Reusable example parts: `examples/shared/README.md`.

@@ -280,6 +280,7 @@ Gratify grew up building a node editor, so the hard problems most frameworks pun
 - **The surface is a part too** — the canvas grid, pan/zoom, marquee, HUD, and post-effects are just facets on the root, reachable by every extension mechanism.
 - **Pan/zoom-aware everything** — gestures operate correctly under a viewport transform, and elements live on a `world` / `overlay` / `screen` layer so a HUD stays put while the content pans.
 - **Time as a first-class input** — the `GNode.time` clock drives continuous motion (pulses, tremors, orbiting cameras), and an `ambient` hook keeps the loop awake only while such motion is running, then lets it sleep again.
+- **Data views that scale** — `Virtual` builds only the rows its viewport can show, `clip` masks the rest from paint *and* hit-testing, `Wheel` scrolls under the pointer, and `pin` keeps scrolled rows exactly where the wheel put them. A 10,000-row table costs what a 30-row one costs, and the scroll offset is the list's own, so undo never scrolls a pane.
 
 ### 7. Small, fast, honest
 
@@ -340,6 +341,8 @@ The through-line: where React and WPF grew a *separate subsystem* per row, Grati
 
 The kernel, layout, interactors, extensions, themes, anchors, and adornments all work — every claim in this README has a [running example](https://ara3d.github.io/gratify/).
 
-Not built yet: instance-local (per-node) UI state, and modal popups such as dropdowns.
+Also built: instance-local state and modal popups (the [`dropdown`](examples/dropdown/) example), and the data-view tier — a `clip` facet, a `Wheel` interactor, `pin`/`grow` placement, size-aware composites and a virtualized `Virtual` list — proven by a 10,000-row [`data-grid`](examples/data-grid/), a [`tree-view`](examples/tree-view/), a [`schema-graph`](examples/schema-graph/) with multi-port nodes, and a [`workbench`](examples/workbench/) that composes all three.
+
+Not built yet: per-pane cameras. The runtime has one viewport, so a node graph inside a pane cannot pan without moving the rest of the workbench.
 
 **Text input is deliberately out of scope for now**, so Gratify suits canvas-first UIs — dashboards, editors, HUDs, node graphs — rather than text-heavy forms.

@@ -12,6 +12,16 @@ reducer, modal input capture via `modal(el, dismiss)` — decisions recorded in
 extensions, keyboard-and-drag, node-editor, widget-board, borders,
 combo-button, magnify, earthquake, adornments, dropdown. M4 not started.*
 
+*Status 2026-09-17: the **data-view tier** landed — `clip` facet (paint + hit
+mask), `Wheel` interactor (routed hit-first, Pan zoom as fallback), `pin`
+(driven placement, no springs/ghosts), `grow` (flex-grow), `body(size)` with
+re-expansion on resize, `Virtual` (virtualized list, local scroll, scrollbar,
+`reveal`), modifier keys on press/keys, focus to the nearest focusable
+ancestor with key bubbling, `fill()` handing avail to children. Examples:
+data-grid, tree-view, schema-graph, workbench; reusable parts + pure math in
+`examples/shared/` (see its README). Next rock for the workbench: a per-pane
+camera facet (nested viewports) — the runtime still has one pan/zoom.*
+
 *This plan describes how to get from an empty repository to
 the framework the [README](../README.md) promises. The README is the spec: every
 claim in it must eventually be backed by running code, and the plan is organized
