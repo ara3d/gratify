@@ -410,3 +410,23 @@ describe("grow(element)", () => {
     expect(b2.w).toBe(50 + 300);
   });
 });
+
+describe("pin(element): instant enter/exit", () => {
+  const Box = part("pi-box").props<Record<string, never>>().size(() => v(20, 20)).render(() => {});
+  it("pinned children appear at full enter and leave without ghosting", () => {
+    type D = { keys: string[] };
+    type I = { kind: "set"; keys: string[] };
+    const rt = new Runtime<D, I>(null, {
+      init: { keys: ["a", "b"] },
+      update: (_d, i) => ({ keys: i.keys }),
+      view: (d) => Free("root", {}, d.keys.map((k, i) => pin(at(Box(k, {}), v(0, i * 20))))),
+    }, { headless: true, width: 200, height: 200 });
+    rt.step(1);
+    expect(rt.root.children[0].ch.enter).toBe(1);
+    rt.dispatch({ kind: "set", keys: ["b", "c"] });
+    rt.step(1);
+    expect(rt.root.ghosts.length).toBe(0);
+    expect(rt.root.children.map((c) => c.key)).toEqual(["b", "c"]);
+    expect(rt.root.children[1].ch.enter).toBe(1);
+  });
+});

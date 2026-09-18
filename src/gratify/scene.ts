@@ -38,10 +38,11 @@ export interface Element {
    *  document order — untiered apps paint exactly as before. Set it with
    *  `tier(element, n)`. Higher tiers draw later (above) and hit-test first. */
   tier?: number;
-  /** Pinned placement: this element and its subtree take their layout rects
-   *  immediately instead of springing toward them. For content whose position
-   *  is DRIVEN — scrolled rows, a thumb under the pointer — where a spring
-   *  would only add lag. Enter/exit still animate. Set it with `pin(element)`. */
+  /** Driven placement: this element and its subtree take their layout rects
+   *  immediately instead of springing toward them, and the element appears
+   *  and vanishes without the enter/exit animation. For content a parent
+   *  DRIVES — scrolled rows, a thumb under the pointer — where a spring would
+   *  only add lag and a ghost would only linger. Set it with `pin(element)`. */
   pin?: boolean;
   /** Share of the container's main-axis slack this element absorbs (Stack /
    *  Row). Unset = none. Set it with `grow(element, weight)`. */
@@ -52,8 +53,9 @@ export interface Element {
  *  rect to `pos` in its layer's coordinates. */
 export const at = (element: Element, pos: Vec): Element => ({ ...element, pos });
 
-/** Pin an element's placement: its subtree snaps to layout rects instead of
- *  gliding — the right call when a parent scrolls or drags it directly. */
+/** Pin an element: its subtree snaps to layout rects instead of gliding, and
+ *  it enters/exits instantly — the right call when a parent scrolls or drags
+ *  it directly. Its hover/press/state channels animate as usual. */
 export const pin = (element: Element): Element => ({ ...element, pin: true });
 
 /** Let an element absorb its container's slack along the main axis (Stack:
@@ -97,7 +99,7 @@ export class Instance {
 
   constructor(e: Element, parent?: Instance) {
     this.key = e.key; this.part = e.part; this.el = e; this.parent = parent;
-    this.ch.enter = 0;
+    this.ch.enter = e.pin ? 1 : 0;    // a driven (pinned) element appears at once
   }
   get props(): unknown { return this.el.props; }
   cval(k: string): number { return this.ch[k] || 0; }
@@ -128,7 +130,9 @@ export function reconcile(prev: Instance | null, e: Element, parent?: Instance):
     }
   }
   for (const c of inst.children) {
-    if (!newKeys.has(c.key) && !c.exiting) {
+    // a vanished child ghosts out — unless it was pinned (driven): scrolled-
+    // out rows just go, so a fast scroll never leaves a wake of fading ghosts.
+    if (!newKeys.has(c.key) && !c.exiting && !c.el.pin) {
       c.exiting = true; c.freshGhost = true;
       inst.ghosts.push(c);
     }
