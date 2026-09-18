@@ -40,6 +40,7 @@ export default defineConfig({
         windows: resolve(__dirname, "examples/windows/index.html"),
         "schema-graph": resolve(__dirname, "examples/schema-graph/index.html"),
         workbench: resolve(__dirname, "examples/workbench/index.html"),
+        attention: resolve(__dirname, "examples/attention/index.html"),
       },
     },
   },
