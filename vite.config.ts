@@ -39,6 +39,7 @@ export default defineConfig({
         "tree-view": resolve(__dirname, "examples/tree-view/index.html"),
         windows: resolve(__dirname, "examples/windows/index.html"),
         "schema-graph": resolve(__dirname, "examples/schema-graph/index.html"),
+        workbench: resolve(__dirname, "examples/workbench/index.html"),
       },
     },
   },
