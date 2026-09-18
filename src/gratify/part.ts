@@ -120,6 +120,11 @@ export interface PartSpec<P, S = Record<string, unknown>, L = unknown> {
   anchors?(node: GNode<P>): { id: string; pos: Vec; meta?: unknown }[];
   /** Custom hit test (e.g. distance-to-curve for wires). Default: rect. */
   hit?(node: GNode<P>, p: Vec): boolean;
+  /** Mask this part's paint and its whole subtree to its own rect, and hide
+   *  the masked region from hit-testing — the seam a scrolling viewport needs.
+   *  Applies within the part's own layer; adornments and children promoted to
+   *  another layer draw unmasked. */
+  clip?: boolean;
   /** Extra animated channels beyond the automatic ones. */
   channels?: Record<string, ChannelSpec<P, L>>;
   /** tokens + channels (+ props) → a flat record of resolved visual values. */
@@ -213,7 +218,7 @@ type Cap =
   | "size" | "intrinsic" | "measure" | "arrange" | "fill" | "pack" | "body"
   | "style" | "render"
   | "channels" | "on" | "press" | "drag1d" | "gesture" | "keys"
-  | "adorn" | "island" | "anchors" | "hit" | "semantics"
+  | "adorn" | "island" | "anchors" | "hit" | "clip" | "semantics"
   | "local" | "reduce";
 
 type LayoutCap = "size" | "intrinsic" | "measure" | "arrange" | "fill" | "pack" | "body";
@@ -309,6 +314,8 @@ interface BuilderMethods<P, F, S, C extends Cap, K extends string, L> {
     PartBuilder<P, F, S, Done<C, "anchors">, K, L>;
   /** Custom hit test. */
   hit(f: (node: GNode<F, K, L>, p: Vec) => boolean): PartBuilder<P, F, S, Done<C, "hit">, K, L>;
+  /** Mask paint and hit-testing of this part's subtree to its own rect. */
+  clip(): PartBuilder<P, F, S, Done<C, "clip">, K, L>;
   /** Semantics slot (guide §3.11): declare role/label/value for the runtime's
    *  queryable tree (`Runtime.semanticsTree()`). Data only — no DOM, no ARIA.
    *  Return null to omit. One per part. */
@@ -361,6 +368,7 @@ function builderOf(def: PartDef<any, any>): any {
   b.island = (f: any) => chain({ island: f });
   b.anchors = (f: any) => chain({ anchors: f });
   b.hit = (f: any) => chain({ hit: f });
+  b.clip = () => chain({ clip: true });
   b.semantics = (f: any) => chain({ semantics: f });
   return b;
 }

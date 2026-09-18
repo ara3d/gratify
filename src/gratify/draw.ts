@@ -52,6 +52,9 @@ function drawPass(inst: Instance, p: Painter, pass: Layer, inherited: Layer, env
 
   if (layer === pass) {
     const part = env.eff(inst);
+    // a clipping part masks its own paint AND its subtree (children draw
+    // inside this push/pop scope); pop() lifts the mask.
+    if (part.clip) p.clip(inst.rect);
     if (part.render) {
       const style = part.style ? part.style(tokens, inst.ch, inst.props) : {};
       part.render(env.nodeOf(inst), p, style);

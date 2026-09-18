@@ -599,11 +599,14 @@ export class Runtime<TDoc, TIntent> {
   }
 
   private renderHit(inst: Instance, p: Vec): Instance | null {
+    const part = this.effs.get(inst);
+    // a clipping part hides whatever it masks: nothing outside its rect is
+    // hittable, even if a child's rect extends past it (scrolled-out rows).
+    if (part.clip && !inst.rect.contains(this.layerPoint(this.layerOfInst(inst), p))) return null;
     for (let i = inst.children.length - 1; i >= 0; i--) {
       const hit = this.renderHit(inst.children[i], p);
       if (hit) return hit;
     }
-    const part = this.effs.get(inst);
     if ((part.render || part.on?.length) && this.hitTest(inst, p)) return inst;
     return null;
   }

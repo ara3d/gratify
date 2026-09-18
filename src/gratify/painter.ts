@@ -38,11 +38,31 @@ export interface Painter {
   view(pan: Vec, zoom: number, dpr: number): void;
   /** Cubic bezier connector with horizontal tangents. */
   wire(a: Vec, b: Vec, c: Color, lw: number): void;
+  /** Restrict every later draw in the current push()/pop() scope to `r`
+   *  (scrolling viewports, masked content). Lifted by pop(). */
+  clip(r: Rect): void;
 }
 
 const SANS = `"Segoe UI", system-ui, sans-serif`;
 const MONO = `"Cascadia Code", ui-monospace, monospace`;
 const font = (o?: LabelOpts) => `${o?.weight || 400} ${o?.size || 13}px ${o?.mono ? MONO : SANS}`;
+
+const ELLIPSIS = "…";
+
+/** The longest prefix of `text` that fits in `maxW` at `size`, with an
+ *  ellipsis when it had to be cut (grid cells, tree labels). Binary search
+ *  over the prefix length: O(log n) measures, so it is fine per row per frame.
+ *  Returns "" when not even the ellipsis fits. */
+export function fitText(m: Measure, text: string, maxW: number, size?: number): string {
+  if (m.text(text, size).x <= maxW) return text;
+  if (m.text(ELLIPSIS, size).x > maxW) return "";
+  let lo = 0, hi = text.length;   // prefix(lo)+… fits; prefix(hi)+… does not
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (m.text(text.slice(0, mid) + ELLIPSIS, size).x <= maxW) lo = mid; else hi = mid;
+  }
+  return text.slice(0, lo).trimEnd() + ELLIPSIS;
+}
 
 export class CanvasPainter implements Painter {
   ctx: CanvasRenderingContext2D;
@@ -75,6 +95,9 @@ export class CanvasPainter implements Painter {
     const c = this.ctx, [c1, c2] = wireCtrl(a, b);
     c.beginPath(); c.moveTo(a.x, a.y); c.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y);
     c.strokeStyle = css(col); c.lineWidth = lw; c.lineCap = "round"; c.stroke();
+  }
+  clip(r: Rect) {
+    this.ctx.beginPath(); this.ctx.rect(r.x, r.y, r.w, r.h); this.ctx.clip();
   }
   push() { this.ctx.save(); }
   pop() { this.ctx.restore(); }
@@ -130,6 +153,7 @@ export class CanvasPainter implements Painter {
 export class NullPainter implements Painter {
   measure: Measure = { text: (s, size = 13) => ({ x: s.length * size * 0.55, y: size * 1.3 }) };
   clear() {} box() {} label() {} dot() {} ring() {} line() {} wire() {}
+  clip(_r: Rect) {}
   glow(_c: Color, _b: number, draw: () => void) { draw(); }
   push() {} pop() {} alpha() {} translate() {} scaleAt() {} screen() {} view() {}
 }
