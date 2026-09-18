@@ -41,6 +41,7 @@ export default defineConfig({
         "schema-graph": resolve(__dirname, "examples/schema-graph/index.html"),
         workbench: resolve(__dirname, "examples/workbench/index.html"),
         attention: resolve(__dirname, "examples/attention/index.html"),
+        hud: resolve(__dirname, "examples/hud/index.html"),
       },
     },
   },
