@@ -1,4 +1,4 @@
-import{m as u,r as m,c as k,a as l,S as f,L as a,R as c,e as g,f as x}from"./runtime-SYGMWnMk.js";import{d as b,B as o,e as y,m as h,w as d,T as w,b as v,C as S,f as E,g as C}from"./widgets-XQLqdpkT.js";import{a as A}from"./source-panel-CSqvtNlY.js";import{w as T}from"./widgets-EtuMVc6k.js";const B=`// ============================================================================\r
+import{m as u,r as m,c as k,a as l,S as f,L as a,R as c,e as g,f as x}from"./runtime-DNEt0yeT.js";import{d as b,B as o,e as y,m as h,w as d,T as w,b as v,C as S,f as E,g as C}from"./widgets-BUxxEPAc.js";import{a as A}from"./source-panel-CSqvtNlY.js";import{w as T}from"./widgets-EtuMVc6k.js";const B=`// ============================================================================\r
 // Example: extensions — "wrap, don't edit", at all three scopes.\r
 //\r
 // An extension is an ordinary function from part definition to part\r

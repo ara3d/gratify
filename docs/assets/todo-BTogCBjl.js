@@ -1,4 +1,4 @@
-import{m as o,S as d,L as i,R as a}from"./runtime-SYGMWnMk.js";import{C as s,i as l,B as c}from"./widgets-XQLqdpkT.js";import{a as m}from"./source-panel-CSqvtNlY.js";import{w as h}from"./widgets-EtuMVc6k.js";const g=`// ============================================================================\r
+import{m as o,S as d,L as i,R as a}from"./runtime-DNEt0yeT.js";import{C as s,i as l,B as c}from"./widgets-BUxxEPAc.js";import{a as m}from"./source-panel-CSqvtNlY.js";import{w as h}from"./widgets-EtuMVc6k.js";const g=`// ============================================================================\r
 // Example: todo — keyed enter / exit / reflow.\r
 //\r
 // What to look for when you run it:\r
