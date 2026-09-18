@@ -177,10 +177,13 @@ npm run check    # boundary + tsc
 | `tree-view` | virtualized tree, springing chevrons, →/← idiom, `reveal` jump (`shared/tree.ts`, `tree-math.ts`) |
 | `schema-graph` | multi-port nodes, FK wires, marquee gesture, layered auto-layout, minimap + Dock (`shared/marquee.ts`, `graph-layout.ts`, `minimap.ts`) |
 | `workbench` | tree + grid + graph pane in Splits; one selection fact; per-pane camera = extension point |
+| `attention` | eight idle cues that ask for interaction and stop once answered (heartbeat halo, sheen sweep, sonar badge, idle nudge, marching drop zone, blinking key prompt, shimmer, spotlight); a `live` channel fades each out; `ambient` only while a cue is live |
+| `hud` | game HUD: health with a lagging damage ghost, XP + level badge flash, odometer, hold-to-confirm timed from an impulse channel (`impulseAge`), radial cooldown wipes, toasts/banner expired via `onCommit` timers |
+| `title-screen` | game main menu: sheened breathing title, drifting motes with pointer parallax, cascade-in menu with a springing selector, sliding panels, a stretching segmented pill; relative key intents (`confirm`, `move by`) |
 
 Adornments: `adorn(node) → Element[]` on the overlay layer, positioned with `at(el, worldPos)`; interactive ones (with `on`) capture clicks, decorative ones (tooltip/badge) pass through. Append to any widget with `addAdorn(fn)`.
 
-Copy pattern from nearest example. Prefer `examples/shared/widgets` for stock Button/Toggle when extending demos.
+Copy pattern from nearest example. Prefer `examples/shared/widgets` for stock Button/Toggle/TimedButton when extending demos. Time-driven cues (pulses, sweeps, cooldowns, odometers) go through the pure curves in `examples/shared/motion.ts`; small shapes (sheen band, polygon, pie sector, bloom) through `examples/shared/paint.ts`. Painter primitives: box/dot/ring/arc/poly/line/wire/label/glow/clip.
 
 ## Agent do / don't
 

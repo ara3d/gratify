@@ -11,7 +11,7 @@ testable without a runtime.
 
 | File | Role |
 |---|---|
-| `widgets.ts` | Stock controls: Button, Checkbox, Toggle, Slider, Range, CloseButton, Card, Labeled |
+| `widgets.ts` | Stock controls: Button, TimedButton (intent stamped with the click time), Checkbox, Toggle, Slider, Range, CloseButton, Card, Labeled |
 | `range-math.ts` | The dual-thumb range's value ↔ pixel math (`tests/range-math.test.ts`) |
 | `grid.ts` | DataGrid: virtualized table with a sortable header, column grips, row selection, keyboard cursor |
 | `grid-math.ts` | Column spans, the click / shift / ctrl selection algebra, sort cycling, a stable typed sort (`tests/grid-math.test.ts`) |
@@ -19,7 +19,9 @@ testable without a runtime.
 | `tree-math.ts` | `flatten` of an expanded tree, ancestors, expand-all, the Right/Left key moves (`tests/tree-math.test.ts`) |
 | `split.ts` | Split (two panes, draggable divider, either axis) and Pane (a well that fills) |
 | `marquee.ts` | Rubber-band selection as one reusable gesture; emits a host-relative rect |
-| `minimap.ts` | Minimap (screen-layer overview read from the live viewport) and Dock (pin a child to a viewport corner) |
+| `minimap.ts` | Minimap (screen-layer overview read from the live viewport) and Dock (pin a child to a viewport corner, or centered along the top or bottom edge) |
+| `motion.ts` | Pure time curves for cues and gauges: breathe, heartbeat, sweep, pings, nudge, blink, cascade, odometer digit rolls, impulse age, cooldown, flash, rounded-rect perimeter walking and marching dashes (`tests/motion.test.ts`) |
+| `paint.ts` | Painter helpers built from the primitives: sheen band, regular polygon, pie sector, stacked-disc bloom |
 | `graph-layout.ts` | Layered auto-layout: longest-path layering, barycenter ordering, placement (`tests/graph-layout.test.ts`) |
 | `sample-schema.ts` | The sample database: tables, foreign keys, a deterministic row generator, the schema as a tree |
 | `source-panel.ts` | The syntax-colored source viewer every example page shows beside its canvas |
