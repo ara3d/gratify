@@ -4,10 +4,9 @@
 // instead of snapping off. All motion is `node.time` through motion.ts curves,
 // plus the automatic hover/press channels.
 
-import {
-  at, burst, calpha, Color, GNode, hsl, Painter, part, rect, Rect, Ring, surface, v, Vec,
-} from "gratify";
+import { at, burst, calpha, GNode, hsl, part, rect, Rect, Ring, surface, v, Vec } from "gratify";
 import { blink, breathe, dashes, heartbeat, nudge, pings, sweep } from "../shared/motion";
+import { bloom, sheenBand } from "../shared/paint";
 
 export const CW = 150, CH = 56;      // every cue's content box, the Card pads around it
 
@@ -16,16 +15,6 @@ export interface CueIntent { kind: "ack"; id: string; time: number }
 
 const ack = (n: GNode<CueProps>): CueIntent => ({ kind: "ack", id: n.props.id, time: n.time ?? 0 });
 const liveOf = { target: (n: GNode<{ live: boolean }>) => (n.props.live ? 1 : 0), rate: 4 };
-
-/** A translucent diagonal band clipped to `r`, its left edge at fraction `x`
- *  of the width (a little past both ends so it enters and leaves cleanly). */
-export function sheenBand(p: Painter, r: Rect, x: number, color: Color) {
-  const w = r.w * 0.28, skew = r.h * 0.6;
-  const left = r.x - w - skew + (r.w + 2 * w + skew) * x;
-  p.push(); p.clip(r);
-  p.poly([v(left + skew, r.y), v(left + skew + w, r.y), v(left + w, r.bottom), v(left, r.bottom)], color);
-  p.pop();
-}
 
 // ── 1. Pulse — a heartbeat glow ring around the primary action ───────────────
 export const PulseButton = part("cue-pulse")
@@ -258,7 +247,7 @@ export const SpotlightTile = part("cue-spotlight")
     const at_ = n.pointer && hover > 0.02 ? n.pointer : idle;
     const strength = Math.max(hover, 0.45 * n.ch.live * (1 - hover));
     p.push(); p.clip(r.inset(1));
-    for (let i = 1; i <= 14; i++) p.dot(at_, 70 * (i / 14), calpha(s.light, (0.06 * strength) / 14 * (15 - i)));
+    bloom(p, at_, 70, s.light, 0.5 * strength);
     p.pop();
     p.label("Hover me", r.center, s.text, { weight: 600, size: 14 });
   })

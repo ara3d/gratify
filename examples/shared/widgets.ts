@@ -36,6 +36,32 @@ export const Button = part<ButtonProps>()("button", {
   on: [Press((node) => node.props.press)],
 });
 
+// ---- TimedButton ----------------------------------------------------------------
+// The same face as Button, but the intent is built at click time from the
+// node's clock — for reducers that record WHEN something happened (idle
+// timers, cooldowns, flashes) without reading a clock themselves.
+export interface TimedButtonProps {
+  label: string;
+  to(time: number): Intentish;
+  accent?: boolean;
+  danger?: boolean;
+}
+
+export const TimedButton = part("timed-button")
+  .props<TimedButtonProps>()
+  .size((props, m) => v(m.text(props.label).x + 28, 32))
+  .style((t, ch, props) => ({
+    ...surface(t, ch, { tint: props.danger ? t.danger : props.accent ? t.accent : undefined }),
+    corner: 8,
+    lift: 2 * ch.hover - 2 * ch.press,
+  }))
+  .render((node, p, s) => {
+    const r = node.rect.raise(s.lift);
+    p.box(r, s.corner, s.fill, s.edge, 1);
+    p.label(node.props.label, r.center, s.text, { weight: 500 });
+  })
+  .press((node) => node.props.to(node.time ?? 0));
+
 // ---- Checkbox -----------------------------------------------------------------
 // With `label`, the text is part of the SAME part — so the whole box-plus-text
 // run is one hit target and clicking the words toggles too (the HTML <label>

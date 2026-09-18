@@ -62,15 +62,18 @@ export const Minimap = part("minimap")
   })
   .semantics((n) => ({ role: "img", label: `minimap of ${n.props.items.length} nodes` }));
 
-export type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+export type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right" | "top" | "bottom";
 
-/** Fills the viewport (screen layer) and pins its one child to a corner. */
+/** Fills the viewport (screen layer) and pins its one child to a corner, or
+ *  centered along the top or bottom edge. */
 export const Dock = part("dock")
   .props<{ corner?: Corner; margin?: number }>()
   .defaults({ corner: "bottom-right" as Corner, margin: 12 })
   .fill()
   .arrange((p, r, kids) => kids.map((k) => {
-    const x = p.corner.endsWith("right") ? r.right - p.margin - k.size.x : r.x + p.margin;
+    const x = p.corner.endsWith("right") ? r.right - p.margin - k.size.x
+      : p.corner.endsWith("left") ? r.x + p.margin
+      : r.x + (r.w - k.size.x) / 2;
     const y = p.corner.startsWith("bottom") ? r.bottom - p.margin - k.size.y : r.y + p.margin;
     return rect(x, y, k.size.x, k.size.y);
   }));

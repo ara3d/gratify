@@ -17,8 +17,8 @@
 // awake while any cue is still live — answer them all and the scene sleeps.
 // ============================================================================
 
-import { addOn, Element, Keys, Label, mount, part, Row, Stack, surface, v, withExt } from "gratify";
-import { Card } from "../shared/widgets";
+import { addOn, Element, Keys, Label, mount, Row, Stack, withExt } from "gratify";
+import { Card, TimedButton } from "../shared/widgets";
 import {
   CueIntent, DragChip, DropZone, KeyPrompt, NudgeButton, PulseButton, SheenButton, Skeleton,
   SonarInbox, SpotlightTile,
@@ -64,19 +64,6 @@ const liveCount = (doc: Doc) =>
   ["pulse", "sheen", "nudge", "key", "spot"].filter((id) => !doc.acked[id]).length
   + (doc.unread > 0 ? 1 : 0) + (doc.dropped ? 0 : 1) + (doc.loaded ? 0 : 1);
 
-// ── A toolbar button whose intent carries the click's time (so `update` can
-// refresh `lastInput` without reading a clock itself) ─────────────────────────
-const ToolButton = part("tool-button")
-  .props<{ label: string; to: (time: number) => Intent; accent?: boolean }>()
-  .size((p, m) => v(m.text(p.label).x + 28, 32))
-  .style((t, ch, p) => ({ ...surface(t, ch, { tint: p.accent ? t.accent : undefined }), lift: 2 * ch.hover - 2 * ch.press }))
-  .render((n, p, s) => {
-    const r = n.rect.raise(s.lift);
-    p.box(r, 8, s.fill, s.edge, 1);
-    p.label(n.props.label, r.center, s.text, { weight: 500 });
-  })
-  .press((n) => n.props.to(n.time ?? 0));
-
 // ── View ──────────────────────────────────────────────────────────────────────
 const stamp = (doc: Doc, id: string) => (doc.acked[id] ? "answered" : "waiting");
 
@@ -115,9 +102,9 @@ function view(doc: Doc): Element {
     Row("row0", { gap: 16 }, cells.slice(0, 4)),
     Row("row1", { gap: 16 }, cells.slice(4)),
     Row("tools", { gap: 10 }, [
-      ToolButton("msg", { label: "New message", to: (time) => ({ kind: "message", time }) }),
-      ToolButton("load", { label: doc.loaded ? "Loaded" : "Load content", to: (time) => ({ kind: "load", time }), accent: !doc.loaded }),
-      ToolButton("reset", { label: "Reset all", to: (time) => ({ kind: "reset", time }) }),
+      TimedButton("msg", { label: "New message", to: (time) => ({ kind: "message", time }) }),
+      TimedButton("load", { label: doc.loaded ? "Loaded" : "Load content", to: (time) => ({ kind: "load", time }), accent: !doc.loaded }),
+      TimedButton("reset", { label: "Reset all", to: (time) => ({ kind: "reset", time }) }),
     ]),
   ]);
   // Space answers the key prompt from anywhere: keys fall through to the root.
