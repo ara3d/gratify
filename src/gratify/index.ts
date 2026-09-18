@@ -14,6 +14,7 @@
 //   theme        tokens, themes, theme-scope extensions
 //   fx/particles/effects  transient-effect contract / engine / stock library
 //   containers/label      built-in parts
+//   scroll/virtual        scroll arithmetic + the virtualized list
 //   middleware   app-wide policies (undo, logging)
 // ============================================================================
 
@@ -26,6 +27,8 @@ export * from "./interact";
 export * from "./style";
 export * from "./containers";
 export * from "./label";
+export * from "./scroll";
+export * from "./virtual";
 export * from "./extend";
 export * from "./compose";
 export * from "./fx";

@@ -307,7 +307,7 @@ interface BuilderMethods<P, F, S, C extends Cap, K extends string, L> {
     PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Full gesture; the private state type is INFERRED from `begin`'s return —
    *  no more `Gesture<Props, State>` restating the prop type. */
-  gesture<S2>(spec: GestureSpec<F, S2>): PartBuilder<P, F, S, Done<C, never>, K, L>;
+  gesture<S2>(spec: GestureSpec<F, S2, K, L>): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Keyboard mapping. Routed focus-first, then hover chain, then root. */
   keys(map: Record<string, (node: GNode<F, K, L>) => Intentish>): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Wheel/trackpad scroll over this part; `delta` in CSS px (y down). */

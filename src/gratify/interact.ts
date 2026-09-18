@@ -54,15 +54,18 @@ export interface Query {
 }
 
 // ---- gesture contract ---------------------------------------------------------
-export interface GestureSpec<P, S> {
+/** `K` (declared channel names) and `L` (local state) are threaded in by the
+ *  part builder's `.gesture()`, so `node.ch` and `node.local` are typed there;
+ *  the standalone `Gesture()` value leaves them open. */
+export interface GestureSpec<P, S, K extends string = string, L = unknown> {
   /** Return null to decline (the next interactor gets a chance). */
-  begin(node: GNode<P>, p: Vec, q: Query): S | null;
-  move?(s: S, node: GNode<P>, p: Vec, q: Query): S;
+  begin(node: GNode<P, K, L>, p: Vec, q: Query): S | null;
+  move?(s: S, node: GNode<P, K, L>, p: Vec, q: Query): S;
   /** Called after move; a returned intent dispatches immediately (live drags:
    *  node move, reorder). */
-  during?(s: S, node: GNode<P>, p: Vec, q: Query): Intentish | void;
+  during?(s: S, node: GNode<P, K, L>, p: Vec, q: Query): Intentish | void;
   /** Return intent(s) to dispatch on release. */
-  up?(s: S, node: GNode<P>, p: Vec, q: Query): Intentish | Intentish[] | void;
+  up?(s: S, node: GNode<P, K, L>, p: Vec, q: Query): Intentish | Intentish[] | void;
   /** Overlay-layer preview elements while active (world coords). */
   view?(s: S, q: Query): Element[];
 }

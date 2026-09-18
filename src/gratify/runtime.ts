@@ -695,7 +695,13 @@ export class Runtime<TDoc, TIntent> {
     canvas.addEventListener("pointermove", (ev) => this.pointerMove(pos(ev), m(ev)));
     canvas.addEventListener("pointerup", (ev) => this.pointerUp(pos(ev)));
     canvas.addEventListener("pointerleave", () => { this.pointer = null; this.wake(); });
-    canvas.addEventListener("wheel", (ev) => { ev.preventDefault(); this.wheel(ev.deltaY, pos(ev), ev.deltaX); }, { passive: false });
+    canvas.addEventListener("wheel", (ev) => {
+      ev.preventDefault();
+      // deltaMode 1 = lines, 2 = pages: normalize to CSS px so a scrolling
+      // part sees the same units from every browser/device.
+      const unit = ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? this.viewH : 1;
+      this.wheel(ev.deltaY * unit, pos(ev), ev.deltaX * unit);
+    }, { passive: false });
     // Keys typed into editable DOM (inputs, textareas, contenteditable overlays)
     // belong to that element, not the canvas surface: DOM focus WINS — Tab
     // inside a DOM island stays native. Only when the canvas consumed the key

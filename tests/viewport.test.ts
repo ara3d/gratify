@@ -171,3 +171,143 @@ describe("body(size)", () => {
     expect(rt.animating).toBe(false);
   });
 });
+
+// ---- scroll arithmetic ------------------------------------------------------------
+import {
+  clampScroll, maxScroll, revealScroll, scrollOfThumb, thumbOf, windowOf, Virtual,
+} from "../src/gratify";
+
+describe("scroll math", () => {
+  it("windowOf covers the visible rows plus overscan, offset ≤ 0, and is empty for no rows", () => {
+    const w = windowOf(1000, 20, 100, 250, 1);
+    expect(w.first).toBe(11);                  // floor(250/20)=12, minus overscan
+    expect(w.last).toBe(18);                   // ceil(350/20)-1=17, plus overscan
+    expect(w.offset).toBe(11 * 20 - 250);      // -30
+    expect(windowOf(0, 20, 100, 0)).toEqual({ first: 0, last: -1, offset: 0 });
+    expect(windowOf(3, 20, 100, 999).last).toBe(2);   // clamps: never past the end
+  });
+
+  it("clampScroll keeps the last row on the bottom edge; NaN reads as 0", () => {
+    expect(maxScroll(50, 20, 100)).toBe(900);
+    expect(clampScroll(5000, 50, 20, 100)).toBe(900);
+    expect(clampScroll(-5, 50, 20, 100)).toBe(0);
+    expect(clampScroll(NaN, 50, 20, 100)).toBe(0);
+    expect(clampScroll(40, 3, 20, 100)).toBe(0);      // content fits: no scroll
+  });
+
+  it("revealScroll moves the minimum: none when visible, to the top edge above, bottom edge below", () => {
+    expect(revealScroll(7, 100, 20, 100, 100)).toBe(100);   // rows 5..9 visible
+    expect(revealScroll(2, 100, 20, 100, 100)).toBe(40);
+    expect(revealScroll(20, 100, 20, 100, 100)).toBe(320);  // 21*20 - 100
+  });
+
+  it("thumb maps scroll ↔ track position round-trip and honors the minimum length", () => {
+    expect(thumbOf(3, 20, 100, 0, 100)).toBeNull();        // fits: no bar
+    const t = thumbOf(100000, 20, 300, 0, 300)!;
+    expect(t.len).toBe(24);                                  // clamped up to minLen
+    for (const s of [0, 12345, 999999]) {
+      const th = thumbOf(1000, 20, 300, s, 300)!;
+      expect(scrollOfThumb(th.start, 1000, 20, 300, 300)).toBeCloseTo(clampScroll(s, 1000, 20, 300), 6);
+    }
+  });
+});
+
+// ---- Virtual: the virtualized list, headless --------------------------------------
+describe("Virtual", () => {
+  type D = { count: number; reveal?: number };
+  type I = { kind: "count"; n: number } | { kind: "reveal"; i: number };
+  const Row = part("vt-row").props<{ i: number }>().size(() => v(50, 20)).render(() => {})
+    .press(() => ({ kind: "count", n: -1 }));
+  const Pane = part("vt-pane").props<Record<string, never>>()
+    .measure(() => v(200, 100))
+    .arrange((_p, r, kids) => kids.map(() => r));
+  const mk = () => new Runtime<D, I>(null, {
+    init: { count: 1000 },
+    update: (d, i) => (i.kind === "count" ? { ...d, count: i.n } : { ...d, reveal: i.i }),
+    view: (d) => Stack("root", { gap: 0 }, [
+      Pane("pane", {}, [
+        Virtual("list", { count: d.count, rowHeight: 20, overscan: 0, reveal: d.reveal, row: (i) => Row(`r${i}`, { i }) }),
+      ]),
+    ]),
+  }, { headless: true, width: 400, height: 400 });
+  const rowKeys = (rt: Runtime<D, I>) =>
+    rt.root.children[0].children[0].children[0].children.map((c) => c.key);
+  const rowRect = (rt: Runtime<D, I>, key: string) =>
+    rt.root.children[0].children[0].children[0].children.find((c) => c.key === key)!.rect;
+
+  it("builds only the rows the viewport can show", () => {
+    const rt = mk();
+    rt.step(3);
+    expect(rowKeys(rt)).toEqual(["r0", "r1", "r2", "r3", "r4"]);   // 100px / 20px
+    expect(rowRect(rt, "r0").w).toBe(190);                        // viewport minus the scrollbar gutter
+  });
+
+  it("the wheel scrolls it; rows re-window with no lag; the doc is untouched", () => {
+    const rt = mk();
+    rt.step(3);
+    rt.wheel(50, { x: 50, y: 50 });
+    rt.step(2);
+    expect(rowKeys(rt)).toEqual(["r2", "r3", "r4", "r5", "r6", "r7"]);
+    expect(rowRect(rt, "r2").y).toBe(-10);                        // pinned: exact on the next frame
+    expect(rt.doc.count).toBe(1000);
+  });
+
+  it("clamps at both ends", () => {
+    const rt = mk();
+    rt.step(3);
+    rt.wheel(-500, { x: 50, y: 50 }); rt.step(2);
+    expect(rowKeys(rt)[0]).toBe("r0");
+    rt.wheel(1e9, { x: 50, y: 50 }); rt.step(2);
+    expect(rowKeys(rt)).toEqual(["r995", "r996", "r997", "r998", "r999"]);
+  });
+
+  it("a scrolled-out row cannot be clicked; a visible one can", () => {
+    const rt = mk();
+    rt.step(3);
+    rt.pointerDown({ x: 50, y: 150 }); rt.pointerUp({ x: 50, y: 150 });   // below the 100px viewport
+    expect(rt.doc.count).toBe(1000);
+    rt.pointerDown({ x: 50, y: 50 }); rt.pointerUp({ x: 50, y: 50 });
+    expect(rt.doc.count).toBe(-1);
+  });
+
+  it("reveal brings a row into view with minimal motion, and stops steering once the user scrolls", () => {
+    const rt = mk();
+    rt.step(3);
+    rt.dispatch({ kind: "reveal", i: 50 }); rt.step(2);
+    expect(rowKeys(rt)).toEqual(["r46", "r47", "r48", "r49", "r50"]);   // row 50 on the bottom edge
+    rt.wheel(20, { x: 50, y: 50 }); rt.step(2);
+    expect(rowKeys(rt)[0]).toBe("r47");                                 // scrolled from the revealed offset
+    rt.wheel(-2000, { x: 50, y: 50 }); rt.step(2);
+    expect(rowKeys(rt)[0]).toBe("r0");                                  // reveal no longer pins us to row 50
+  });
+
+  it("dragging the scrollbar thumb scrolls; clicking the track pages", () => {
+    const rt = mk();
+    rt.step(3);
+    const gutterX = 200 - 4;
+    rt.pointerDown({ x: gutterX, y: 2 });                  // on the thumb (starts at top, 24px min)
+    rt.pointerMove({ x: gutterX, y: 40 });                 // 38px of a 76px travel → half of maxScroll
+    rt.step(2);
+    expect(rowKeys(rt)[0]).toBe(String("r" + Math.floor((38 / 76) * 19900 / 20)));
+    rt.pointerUp({ x: gutterX, y: 40 });
+    rt.step(2);
+    const before = rowKeys(rt)[0];
+    rt.pointerDown({ x: gutterX, y: 98 }); rt.pointerUp({ x: gutterX, y: 98 });   // track below thumb
+    rt.step(2);
+    expect(Number(rowKeys(rt)[0].slice(1))).toBe(Number(before.slice(1)) + 5);  // one page = 100px = 5 rows
+  });
+
+  it("stays consistent when the count shrinks under the scroll offset", () => {
+    const rt = mk();
+    rt.step(3);
+    rt.wheel(1e9, { x: 50, y: 50 }); rt.step(2);
+    rt.dispatch({ kind: "count", n: 8 }); rt.step(2);
+    expect(rowKeys(rt)).toEqual(["r3", "r4", "r5", "r6", "r7"]);
+  });
+
+  it("exposes semantics", () => {
+    const rt = mk();
+    rt.step(3);
+    expect(rt.semanticsTree()[0]).toMatchObject({ role: "list", value: 1000 });
+  });
+});
