@@ -31,6 +31,7 @@ export * from "./label";
 export * from "./scroll";
 export * from "./virtual";
 export * from "./window-math";
+export * from "./window";
 export * from "./extend";
 export * from "./compose";
 export * from "./fx";
