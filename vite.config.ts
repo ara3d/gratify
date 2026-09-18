@@ -37,6 +37,8 @@ export default defineConfig({
         "focus-semantics": resolve(__dirname, "examples/focus-semantics/index.html"),
         "data-grid": resolve(__dirname, "examples/data-grid/index.html"),
         "tree-view": resolve(__dirname, "examples/tree-view/index.html"),
+        windows: resolve(__dirname, "examples/windows/index.html"),
+        "schema-graph": resolve(__dirname, "examples/schema-graph/index.html"),
       },
     },
   },
