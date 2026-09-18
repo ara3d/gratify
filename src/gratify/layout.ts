@@ -92,12 +92,14 @@ function arrangeInst(inst: Instance, target: Rect, memo: MeasureMemo, eff: Eff) 
 
 function stepRects(inst: Instance, dt: number, snap: boolean) {
   const t = inst.target;
+  // `snap` is inherited: overlay trees (adorn, gesture) position their
+  // elements from the HOST's already-spring-animated rect — springing again
+  // toward that moving target compounds the lag (a spring chasing a spring) —
+  // and a `pin(element)` subtree is driven directly (scrolled rows), where a
+  // spring would only lag. Both snap to their targets every frame. Enter/exit
+  // still animate via channels; exiting ghosts keep their last rect.
+  snap = snap || !!inst.el.pin;
   if (!inst.placed || (snap && !inst.exiting)) {
-    // `snap`: overlay trees (adorn, gesture) position their elements from the
-    // HOST's already-spring-animated rect — springing again toward that moving
-    // target compounds the lag (a spring chasing a spring), so overlay
-    // instances pin to their targets every frame. Enter/exit still animate
-    // via channels; exiting ghosts keep their last rect.
     inst.sx.set(t.x); inst.sy.set(t.y); inst.cw = t.w; inst.chh = t.h;
     inst.placed = true;
   } else if (!inst.exiting) {

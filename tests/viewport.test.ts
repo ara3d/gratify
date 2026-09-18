@@ -95,3 +95,43 @@ describe("Wheel interactor", () => {
     expect(rt.viewport.zoom).not.toBe(1);
   });
 });
+
+// ---- pinned placement -----------------------------------------------------------
+import { Free, pin, at } from "../src/gratify";
+
+describe("pin(element)", () => {
+  type D = { y: number };
+  type I = { kind: "move"; y: number };
+  const Box = part("pin-box").props<Record<string, never>>().size(() => v(20, 20)).render(() => {});
+  const Inner = part("pin-inner").props<Record<string, never>>()
+    .measure(() => v(20, 20))
+    .arrange((_p, r, kids) => kids.map((k) => new Rect(r.x, r.y, k.size.x, k.size.y)))
+    .render(() => {});
+  const mk = (pinned: boolean) => new Runtime<D, I>(null, {
+    init: { y: 0 },
+    update: (_d, i) => ({ y: i.y }),
+    view: (d) => {
+      const el = at(Inner("row", {}, [Box("cell", {})]), v(0, d.y));
+      return Free("root", {}, [pinned ? pin(el) : el]);
+    },
+  }, { headless: true, width: 200, height: 200 });
+
+  it("a pinned subtree takes its new rect on the next frame, children included", () => {
+    const rt = mk(true);
+    rt.step(5);
+    rt.dispatch({ kind: "move", y: 100 });
+    rt.step(1);
+    expect(rt.root.children[0].rect.y).toBe(100);
+    expect(rt.root.children[0].children[0].rect.y).toBe(100);
+  });
+
+  it("an unpinned subtree still glides (the default is unchanged)", () => {
+    const rt = mk(false);
+    rt.step(5);
+    rt.dispatch({ kind: "move", y: 100 });
+    rt.step(1);
+    const y = rt.root.children[0].rect.y;
+    expect(y).toBeGreaterThan(0);
+    expect(y).toBeLessThan(100);
+  });
+});

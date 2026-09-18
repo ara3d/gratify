@@ -38,11 +38,20 @@ export interface Element {
    *  document order — untiered apps paint exactly as before. Set it with
    *  `tier(element, n)`. Higher tiers draw later (above) and hit-test first. */
   tier?: number;
+  /** Pinned placement: this element and its subtree take their layout rects
+   *  immediately instead of springing toward them. For content whose position
+   *  is DRIVEN — scrolled rows, a thumb under the pointer — where a spring
+   *  would only add lag. Enter/exit still animate. Set it with `pin(element)`. */
+  pin?: boolean;
 }
 
 /** Position an element (adornments, `Free` children): sets the top-left of its
  *  rect to `pos` in its layer's coordinates. */
 export const at = (element: Element, pos: Vec): Element => ({ ...element, pos });
+
+/** Pin an element's placement: its subtree snaps to layout rects instead of
+ *  gliding — the right call when a parent scrolls or drags it directly. */
+export const pin = (element: Element): Element => ({ ...element, pin: true });
 
 /** Mark an adornment element modal: it gets input first, and a press outside
  *  it (or Escape) dispatches `dismiss` — typically `Local({ kind: "close" })`
