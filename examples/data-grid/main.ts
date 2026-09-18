@@ -15,7 +15,7 @@
 // offset is instance-local, so undo never scrolls the grid.
 // ============================================================================
 
-import { grow, Label, mount, Row, Stack, Element, withUndo } from "gratify";
+import { Flow, grow, Label, mount, Row, Stack, Element, withUndo } from "gratify";
 import { Button } from "../shared/widgets";
 import { DataGrid, Column } from "../shared/grid";
 import {
@@ -135,7 +135,7 @@ function view(doc: Doc): Element {
     ? [...doc.selection.keys].reduce((a, k) => a + (ORDERS[Number(k) - 100000]?.total ?? 0), 0)
     : 0;
   return Stack("root", { gap: 10, pad: 16, align: "stretch" }, [
-    Row("bar", { gap: 8 }, [
+    Flow("bar", { gap: 8, pad: 0 }, [
       Label("title", { text: "Orders", size: 16, weight: 600, bright: true }),
       Label("n", { text: `${doc.order.length.toLocaleString()} of ${ORDERS.length.toLocaleString()} rows`, dim: true, size: 12 }),
       ...[null, "open", "paid", "shipped", "returned"].map((s) =>

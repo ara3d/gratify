@@ -36,6 +36,7 @@ export default defineConfig({
         "three-transform": resolve(__dirname, "examples/three-transform/index.html"),
         "focus-semantics": resolve(__dirname, "examples/focus-semantics/index.html"),
         "data-grid": resolve(__dirname, "examples/data-grid/index.html"),
+        "tree-view": resolve(__dirname, "examples/tree-view/index.html"),
       },
     },
   },
