@@ -370,3 +370,43 @@ describe("focus routing for composite views", () => {
     expect(rt.focusedKey).toBeNull();
   });
 });
+
+// ---- grow: main-axis slack ---------------------------------------------------------
+import { grow, Row } from "../src/gratify";
+
+describe("grow(element)", () => {
+  const Box = part("gr-box").props<{ w: number; h: number }>().size((p) => v(p.w, p.h)).render(() => {});
+  it("a growing Stack child takes the viewport slack; siblings keep their size", () => {
+    const rt = new Runtime<null, never>(null, {
+      init: null, update: (d) => d,
+      view: () => Stack("root", { gap: 10, pad: 0 }, [
+        Box("bar", { w: 100, h: 30 }), grow(Box("body", { w: 100, h: 50 })), Box("foot", { w: 100, h: 20 }),
+      ]),
+    }, { headless: true, width: 400, height: 300 });
+    rt.step(2);
+    const [bar, body, foot] = rt.root.children.map((c) => c.rect);
+    expect(bar.h).toBe(30);
+    expect(body.h).toBe(300 - 30 - 20 - 20);   // slack = view - content - gaps
+    expect(foot.y).toBe(300 - 20);
+  });
+  it("Row shares slack by weight; an unbounded container has none to give", () => {
+    const rt = new Runtime<null, never>(null, {
+      init: null, update: (d) => d,
+      view: () => Stack("root", {}, [
+        Row("row", { gap: 0 }, [grow(Box("a", { w: 50, h: 10 }), 1), grow(Box("b", { w: 50, h: 10 }), 3)]),
+      ]),
+    }, { headless: true, width: 400, height: 300 });
+    rt.step(2);
+    const [a, b] = rt.root.children[0].children.map((c) => c.rect);
+    expect(a.w).toBe(50);     // the Row measured to content (100); no slack inside it
+    expect(b.w).toBe(50);
+    const rt2 = new Runtime<null, never>(null, {
+      init: null, update: (d) => d,
+      view: () => Row("root", { gap: 0, pad: 0 }, [grow(Box("a", { w: 50, h: 10 }), 1), grow(Box("b", { w: 50, h: 10 }), 3)]),
+    }, { headless: true, width: 500, height: 300 });
+    rt2.step(2);
+    const [a2, b2] = rt2.root.children.map((c) => c.rect);
+    expect(a2.w).toBe(50 + 100);
+    expect(b2.w).toBe(50 + 300);
+  });
+});

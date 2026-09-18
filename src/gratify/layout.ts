@@ -84,7 +84,7 @@ function arrangeInst(inst: Instance, target: Rect, memo: MeasureMemo, eff: Eff, 
   if (part.body && (inst.target.w !== target.w || inst.target.h !== target.h)) info.resized = true;
   inst.target = target;
   if (part.arrange && inst.children.length) {
-    const kids = inst.children.map((c) => ({ key: c.key, size: memo.sizeOf(c), props: c.props, pos: c.el.pos }));
+    const kids = inst.children.map((c) => ({ key: c.key, size: memo.sizeOf(c), props: c.props, pos: c.el.pos, grow: c.el.grow }));
     const rects = part.arrange(inst.props, target, kids);
     inst.children.forEach((c, i) => arrangeInst(c, rects[i], memo, eff, info));
   } else {

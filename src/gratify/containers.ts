@@ -13,7 +13,7 @@
 // ============================================================================
 
 import { Rect, v, Vec } from "./core";
-import { part, UNBOUNDED } from "./part";
+import { ChildInfo, part, UNBOUNDED } from "./part";
 
 export interface StackProps {
   gap?: number;
@@ -27,6 +27,15 @@ export interface StackProps {
 
 const alignOff = (align: StackProps["align"], avail: number, size: number) =>
   align === "center" ? (avail - size) / 2 : align === "end" ? avail - size : 0;
+
+/** Main-axis slack (rect beyond content) per unit of `grow` weight — what a
+ *  `grow(child)` absorbs. Zero when nothing grows or nothing is spare. */
+function slackPerWeight(kids: ChildInfo[], mainSizes: number[], inner: number, gap: number): number {
+  const weight = kids.reduce((a, k) => a + (k.grow ?? 0), 0);
+  if (weight <= 0) return 0;
+  const content = mainSizes.reduce((a, s) => a + s, 0) + gap * Math.max(0, kids.length - 1);
+  return Math.max(0, inner - content) / weight;
+}
 
 /** Vertical flow. */
 export const Stack = part("stack")
@@ -42,11 +51,13 @@ export const Stack = part("stack")
   })
   .arrange((p, r, kids) => {
     const inner = r.w - 2 * p.pad;
+    const per = slackPerWeight(kids, kids.map((k) => k.size.y), r.h - 2 * p.pad, p.gap);
     let y = r.y + p.pad;
-    return kids.map(({ size: s }) => {
+    return kids.map(({ size: s, grow }) => {
       const w = p.align === "stretch" ? inner : s.x;
-      const out = new Rect(r.x + p.pad + alignOff(p.align, inner, s.x), y, w, s.y);
-      y += s.y + p.gap;
+      const h = s.y + per * (grow ?? 0);
+      const out = new Rect(r.x + p.pad + alignOff(p.align, inner, s.x), y, w, h);
+      y += h + p.gap;
       return out;
     });
   });
@@ -70,10 +81,13 @@ export const Row = part("row")
       const content = kids.reduce((a, k) => a + k.size.x, 0) + p.gap * (kids.length - 1);
       extra = Math.max(0, (r.w - 2 * p.pad) - content) / (kids.length - 1);
     }
+    const per = slackPerWeight(kids, kids.map((k) => k.size.x), r.w - 2 * p.pad, p.gap);
     let x = r.x + p.pad;
-    return kids.map(({ size: s }) => {
-      const out = new Rect(x, r.y + p.pad + alignOff(p.align, inner, s.y), s.x, s.y);
-      x += s.x + p.gap + extra;
+    return kids.map(({ size: s, grow }) => {
+      const w = s.x + per * (grow ?? 0);
+      const h = p.align === "stretch" ? inner : s.y;
+      const out = new Rect(x, r.y + p.pad + alignOff(p.align, inner, s.y), w, h);
+      x += w + p.gap + extra;
       return out;
     });
   });

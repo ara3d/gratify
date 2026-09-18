@@ -43,6 +43,9 @@ export interface Element {
    *  is DRIVEN — scrolled rows, a thumb under the pointer — where a spring
    *  would only add lag. Enter/exit still animate. Set it with `pin(element)`. */
   pin?: boolean;
+  /** Share of the container's main-axis slack this element absorbs (Stack /
+   *  Row). Unset = none. Set it with `grow(element, weight)`. */
+  grow?: number;
 }
 
 /** Position an element (adornments, `Free` children): sets the top-left of its
@@ -52,6 +55,12 @@ export const at = (element: Element, pos: Vec): Element => ({ ...element, pos })
 /** Pin an element's placement: its subtree snaps to layout rects instead of
  *  gliding — the right call when a parent scrolls or drags it directly. */
 export const pin = (element: Element): Element => ({ ...element, pin: true });
+
+/** Let an element absorb its container's slack along the main axis (Stack:
+ *  height, Row: width), in proportion to `weight` among growing siblings —
+ *  flex-grow. A grid under a toolbar takes the rest of the viewport. With no
+ *  slack (an unbounded container) it keeps its desired size. */
+export const grow = (element: Element, weight = 1): Element => ({ ...element, grow: weight });
 
 /** Mark an adornment element modal: it gets input first, and a press outside
  *  it (or Escape) dispatches `dismiss` — typically `Local({ kind: "close" })`

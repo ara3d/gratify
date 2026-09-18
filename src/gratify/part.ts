@@ -72,6 +72,8 @@ export interface ChildInfo {
   props: unknown;
   /** The child element's `pos` hint (set via `at(...)`), if any. */
   pos?: Vec;
+  /** The child's share of main-axis slack (set via `grow(...)`), if any. */
+  grow?: number;
 }
 
 // ── Two-phase layout: availability + the measuring context ────────────────────
