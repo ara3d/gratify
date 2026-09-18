@@ -430,3 +430,20 @@ describe("pin(element): instant enter/exit", () => {
     expect(rt.root.children[1].ch.enter).toBe(1);
   });
 });
+
+describe("fill() hands its room to its children", () => {
+  it("a fill inside a fill inside the root measures to the viewport, not to a fallback", () => {
+    const Outer = part("ff-outer").props<Record<string, never>>().fill().render(() => {});
+    const Inner = part("ff-inner").props<Record<string, never>>().fill()
+      .arrange((_p, r, kids) => kids.map((k) => new Rect(r.right - k.size.x, r.bottom - k.size.y, k.size.x, k.size.y)));
+    const Box = part("ff-box").props<Record<string, never>>().size(() => v(30, 20)).render(() => {});
+    const rt = new Runtime<null, never>(null, {
+      init: null, update: (d) => d,
+      view: () => Outer("root", {}, [Inner("inner", {}, [Box("box", {})])]),
+    }, { headless: true, width: 400, height: 300 });
+    rt.step(2);
+    expect(rt.root.children[0].rect.w).toBe(400);
+    expect(rt.root.children[0].children[0].rect.x).toBe(370);   // docked bottom-right of a real viewport
+    expect(rt.root.children[0].children[0].rect.y).toBe(280);
+  });
+});

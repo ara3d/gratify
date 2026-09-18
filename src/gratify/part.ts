@@ -279,7 +279,8 @@ interface BuilderMethods<P, F, S, C extends Cap, K extends string, L> {
   /** Container: place children in the final rect. */
   arrange(f: (props: F, rect: Rect, kids: ChildInfo[]) => Rect[]):
     PartBuilder<P, F, S, Done<C, "size" | "intrinsic" | "body" | "pack" | "arrange">, K, L>;
-  /** Container: "I fill whatever I'm given" — measure = avail. */
+  /** Container: "I fill whatever I'm given" — measure = avail, and the
+   *  children are measured under that same room, so a nested fill sees it. */
   fill(): PartBuilder<P, F, S, Done<C, "size" | "intrinsic" | "body" | "pack" | "fill" | "measure">, K, L>;
   /** Container: derive measure AND arrange from one packing function — the two
    *  phases cannot desync. Children are measured intrinsic (UNBOUNDED). */
@@ -354,7 +355,10 @@ function builderOf(def: PartDef<any, any>): any {
   b.intrinsic = (w: number, h: number) => chain({ size: () => v(w, h) });
   b.measure = (f: any) => chain({ measure: f });
   b.arrange = (f: any) => chain({ arrange: f });
-  b.fill = () => chain({ measure: (_p: unknown, avail: Avail) => avail });
+  // A fill container hands its room to its children too: measuring them under
+  // `avail` is what lets a nested fill (a HUD layer inside a surface) see the
+  // real viewport instead of an unbounded fallback.
+  b.fill = () => chain({ measure: (_p: unknown, avail: Avail, m: MeasureCtx) => { m.children(avail); return avail; } });
   b.pack = (f: PackFn<any>) => chain({
     measure: (props: any, avail: Avail, m: MeasureCtx) => f(m.children(UNBOUNDED), avail, props).size,
     arrange: (props: any, r: Rect, kids: ChildInfo[]) => {
