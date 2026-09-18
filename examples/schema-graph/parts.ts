@@ -1,19 +1,15 @@
 // The parts of the schema graph: a table node with one port per column, the
 // foreign-key wire between ports, the rubber wire shown while dragging a new
 // key, and the dot-grid surface that hosts marquee, pan, and the editor-wide
-// keys. Geometry helpers (`tableSize`, `portId`) are exported so the app's
-// pure `update` can hit-test the same rects the parts draw.
+// keys. Geometry helpers (`tableSize`, `tableRect`) are exported so the app's
+// pure `update` can hit-test the same rects the parts draw. The data types and
+// port-id helpers live in shared/sample-schema.ts.
 
 import {
   Anchor, burst, calpha, Color, hsl, Intentish, Mods, Pan, part, Press, Rect, rect, rgb, v, Vec, wireDist,
 } from "gratify";
 import { marquee } from "../shared/marquee";
-
-export interface ColumnDef { name: string; type: string; pk?: boolean }
-export interface TableDef { id: string; name: string; hue: number; pos: Vec; columns: ColumnDef[] }
-/** A foreign key: `from` is a `/out` port on the referencing column, `to` an
- *  `/in` port on the referenced column. */
-export interface FkEdge { id: string; from: string; to: string }
+import { ColumnDef, portId, sideOfPort, TableDef } from "../shared/sample-schema";
 
 export const NODE_W = 220;
 export const HEAD_H = 30;
@@ -23,9 +19,6 @@ const PORT_GRAB = 11;
 
 export const tableSize = (columnCount: number): Vec => v(NODE_W, HEAD_H + columnCount * ROW_H + 6);
 export const tableRect = (t: TableDef): Rect => rect(t.pos.x, t.pos.y, NODE_W, tableSize(t.columns.length).y);
-export const portId = (table: string, column: string, side: "in" | "out") => `${table}:${column}/${side}`;
-export const tableOfPort = (id: string) => id.slice(0, id.indexOf(":"));
-export const sideOfPort = (id: string): "in" | "out" => (id.endsWith("/out") ? "out" : "in");
 
 const rowY = (r: Rect, i: number) => r.y + HEAD_H + 3 + i * ROW_H + ROW_H / 2;
 
@@ -152,21 +145,27 @@ export interface SurfaceProps {
   marquee(r: Rect, mods: Mods): Intentish;
   clear: Intentish;
   keys: Record<string, (mods: Mods) => Intentish>;
+  /** Draw the dot grid inside the part's own rect only (a pane), instead of
+   *  across the whole visible world (an infinite canvas). */
+  bounded?: boolean;
 }
 
-export const Surface = part("schema-surface")
+/** Everything a graph host shares: the dot grid, marquee, click-away, keys. */
+const surfaceBase = (name: string) => part(name)
   .props<SurfaceProps>()
   .fill()
   .hit(() => true)
   .style((t) => ({ dot: calpha(t.muted, 0.35) as Color }))
   .render((n, p, s) => {
     const vw = n.view!, step = 28;
-    const x0 = Math.floor(-vw.pan.x / vw.zoom / step) * step, x1 = (vw.w - vw.pan.x) / vw.zoom;
-    const y0 = Math.floor(-vw.pan.y / vw.zoom / step) * step, y1 = (vw.h - vw.pan.y) / vw.zoom;
+    // the visible world, intersected with our own rect when bounded
+    let x0 = -vw.pan.x / vw.zoom, x1 = (vw.w - vw.pan.x) / vw.zoom;
+    let y0 = -vw.pan.y / vw.zoom, y1 = (vw.h - vw.pan.y) / vw.zoom;
+    if (n.props.bounded) { x0 = Math.max(x0, n.rect.x); x1 = Math.min(x1, n.rect.right); y0 = Math.max(y0, n.rect.y); y1 = Math.min(y1, n.rect.bottom); }
+    x0 = Math.ceil(x0 / step) * step; y0 = Math.ceil(y0 / step) * step;
     for (let x = x0; x <= x1; x += step) for (let y = y0; y <= y1; y += step) p.dot(v(x, y), 1, s.dot);
   })
   .on(marquee<SurfaceProps>({ select: (r, mods, host) => host.props.marquee(r, mods) }))
-  .on(Pan())
   .press((n) => n.props.clear)
   .keys({
     Delete: (n, m) => n.props.keys.Delete?.(m),
@@ -175,3 +174,11 @@ export const Surface = part("schema-surface")
     a: (n, m) => n.props.keys.a?.(m),
     l: (n, m) => n.props.keys.l?.(m),
   });
+
+/** The infinite canvas: Alt-drag pans, wheel zooms (the runtime's one viewport). */
+export const Surface = surfaceBase("schema-surface").on(Pan());
+
+/** A graph inside a pane: clipped to its rect, no pan/zoom. A per-pane
+ *  viewport (a camera facet) is the extension point that would let a pane
+ *  pan without moving the rest of the workbench. */
+export const GraphPane = surfaceBase("graph-pane").clip();

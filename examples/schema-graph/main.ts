@@ -20,8 +20,9 @@ import { Button } from "../shared/widgets";
 import { layeredLayout } from "../shared/graph-layout";
 import { Dock, Minimap } from "../shared/minimap";
 import {
-  FkEdge, FkWire, portId, sideOfPort, Surface, TableDef, TableNode, tableOfPort, tableRect, tableSize,
-} from "./parts";
+  FkEdge, nextEdgeId, SAMPLE_EDGES, SAMPLE_TABLES, sideOfPort, TableDef, tableOfPort,
+} from "../shared/sample-schema";
+import { FkWire, Surface, TableNode, tableRect, tableSize } from "./parts";
 
 import { attachSourcePanel } from "../shared/source-panel";
 import mainSource from "./main.ts?raw";
@@ -29,6 +30,7 @@ import partsSource from "./parts.ts?raw";
 import marqueeSource from "../shared/marquee.ts?raw";
 import layoutSource from "../shared/graph-layout.ts?raw";
 import minimapSource from "../shared/minimap.ts?raw";
+import schemaSource from "../shared/sample-schema.ts?raw";
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -50,8 +52,6 @@ type Intent =
   | { kind: "select-all" }
   | { kind: "arrange" }
   | { kind: "reset" };
-
-let nextEdge = 100;
 
 const withSelection = (doc: Doc, selected: ReadonlySet<string>): Doc => ({ ...doc, selected, selectedEdge: null });
 
@@ -87,7 +87,7 @@ function update(doc: Doc, intent: Intent): Doc {
       if (tableOfPort(from) === tableOfPort(to)) return doc;
       // a column references one target: a new key from the same column replaces the old
       const edges = doc.edges.filter((e) => e.from !== from);
-      return { ...doc, edges: [...edges, { id: `fk-${nextEdge++}`, from, to }] };
+      return { ...doc, edges: [...edges, { id: nextEdgeId(), from, to }] };
     }
     case "select-edge": return { ...doc, selectedEdge: intent.id, selected: new Set() };
     case "delete": {
@@ -104,43 +104,9 @@ function update(doc: Doc, intent: Intent): Doc {
   }
 }
 
-// ── The sample schema ─────────────────────────────────────────────────────────
-
-const T = (id: string, hue: number, columns: [string, string, boolean?][]): TableDef => ({
-  id, name: id, hue, pos: v(0, 0),
-  columns: columns.map(([name, type, pk]) => ({ name, type, pk })),
-});
-const FK = (fromTable: string, fromCol: string, toTable: string, toCol = "id"): FkEdge =>
-  ({ id: `fk-${nextEdge++}`, from: portId(fromTable, fromCol, "out"), to: portId(toTable, toCol, "in") });
-
-const TABLES: TableDef[] = [
-  T("customers", 200, [["id", "bigint", true], ["name", "text"], ["email", "text"], ["address_id", "bigint"]]),
-  T("addresses", 230, [["id", "bigint", true], ["street", "text"], ["city", "text"], ["country", "char(2)"]]),
-  T("orders", 150, [["id", "bigint", true], ["customer_id", "bigint"], ["placed", "timestamp"], ["status", "text"], ["ship_to", "bigint"]]),
-  T("order_lines", 120, [["id", "bigint", true], ["order_id", "bigint"], ["product_id", "bigint"], ["qty", "int"], ["price", "numeric"]]),
-  T("products", 30, [["id", "bigint", true], ["sku", "text"], ["name", "text"], ["category_id", "bigint"], ["supplier_id", "bigint"]]),
-  T("categories", 60, [["id", "bigint", true], ["name", "text"], ["parent_id", "bigint"]]),
-  T("suppliers", 300, [["id", "bigint", true], ["name", "text"], ["country", "char(2)"]]),
-  T("shipments", 270, [["id", "bigint", true], ["order_id", "bigint"], ["carrier", "text"], ["shipped", "timestamp"]]),
-  T("payments", 0, [["id", "bigint", true], ["order_id", "bigint"], ["amount", "numeric"], ["method", "text"]]),
-];
-
-const EDGES: FkEdge[] = [
-  FK("customers", "address_id", "addresses"),
-  FK("orders", "customer_id", "customers"),
-  FK("orders", "ship_to", "addresses"),
-  FK("order_lines", "order_id", "orders"),
-  FK("order_lines", "product_id", "products"),
-  FK("products", "category_id", "categories"),
-  FK("products", "supplier_id", "suppliers"),
-  FK("categories", "parent_id", "categories"),
-  FK("shipments", "order_id", "orders"),
-  FK("payments", "order_id", "orders"),
-];
-
 const INITIAL: Doc = arranged({
-  tables: Object.fromEntries(TABLES.map((t) => [t.id, t])),
-  edges: EDGES,
+  tables: Object.fromEntries(SAMPLE_TABLES.map((t) => [t.id, t])),
+  edges: SAMPLE_EDGES,
   selected: new Set(),
   selectedEdge: null,
 });
@@ -205,4 +171,5 @@ attachSourcePanel([
   { name: "marquee.ts (shared)", code: marqueeSource },
   { name: "graph-layout.ts (shared)", code: layoutSource },
   { name: "minimap.ts (shared)", code: minimapSource },
+  { name: "sample-schema.ts (shared)", code: schemaSource },
 ]);

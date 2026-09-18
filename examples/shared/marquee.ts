@@ -18,7 +18,8 @@ export const rectOf = (a: Vec, b: Vec): Rect =>
   rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
 
 export interface MarqueeOpts<P> {
-  /** What a completed drag emits. `r` is in the host's layer coordinates;
+  /** What a completed drag emits. `r` is relative to the host's rect origin —
+   *  the host's content coordinates, whether it is the whole canvas or a pane;
    *  `host` is the surface node, so the intent can come from its props. */
   select(r: Rect, mods: Mods, host: GNode<P>): Intentish;
   /** Drags shorter than this (px) are clicks, not marquees. Default 4. */
@@ -32,6 +33,10 @@ export function marquee<P = unknown>(opts: MarqueeOpts<P>): Interactor<P> {
     begin: (_n, p, q) => (q.mods.alt ? null : { a: p, b: p, mods: { ...q.mods } }),
     move: (s, _n, p, q) => ({ ...s, b: p, mods: { ...q.mods } }),
     view: (s) => (long(s) ? [MarqueeBox("marquee", { a: s.a, b: s.b })] : []),
-    up: (s, n) => (long(s) ? opts.select(rectOf(s.a, s.b), s.mods, n) : undefined),
+    up: (s, n) => {
+      if (!long(s)) return;
+      const r = rectOf(s.a, s.b);
+      return opts.select(rect(r.x - n.rect.x, r.y - n.rect.y, r.w, r.h), s.mods, n);
+    },
   });
 }
