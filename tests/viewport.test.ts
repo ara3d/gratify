@@ -60,3 +60,38 @@ describe("clip facet", () => {
     expect(clips[clips.length - 1].h).toBe(50);
   });
 });
+
+// ---- wheel routing --------------------------------------------------------------
+describe("Wheel interactor", () => {
+  type D = { scrolled: number; zoomed: boolean };
+  type I = { kind: "scroll"; by: number };
+  const Row = part("wheel-row").props<Record<string, never>>().size(() => v(100, 20)).render(() => {});
+  const List = part("wheel-list").props<Record<string, never>>()
+    .measure(() => v(100, 60))
+    .arrange((_p, r, kids) => kids.map((k, i) => new Rect(r.x, r.y + i * 20, k.size.x, k.size.y)))
+    .render(() => {})
+    .wheel((_n, d) => ({ kind: "scroll", by: d.y }));
+  const Surface = part("wheel-surface").props<Record<string, never>>()
+    .fill().render(() => {}).on({ kind: "pan" });
+  const mk = () => new Runtime<D, I>(null, {
+    init: { scrolled: 0, zoomed: false },
+    update: (d, i) => ({ ...d, scrolled: d.scrolled + i.by }),
+    view: () => Surface("root", {}, [List("list", {}, [Row("a", {}), Row("b", {}), Row("c", {})])]),
+  }, { headless: true, width: 300, height: 300 });
+
+  it("routes to the nearest wheel-taking ancestor of the hit (a row inside the list)", () => {
+    const rt = mk();
+    rt.step(2);
+    rt.wheel(100, { x: 50, y: 30 });
+    expect(rt.doc.scrolled).toBe(100);
+    expect(rt.viewport.zoom).toBe(1);            // the list took it; no zoom
+  });
+
+  it("falls back to Pan() zoom when nothing under the pointer takes the wheel", () => {
+    const rt = mk();
+    rt.step(2);
+    rt.wheel(100, { x: 250, y: 250 });
+    expect(rt.doc.scrolled).toBe(0);
+    expect(rt.viewport.zoom).not.toBe(1);
+  });
+});

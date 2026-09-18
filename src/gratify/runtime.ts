@@ -292,7 +292,17 @@ export class Runtime<TDoc, TIntent> {
     this.wake();
   }
 
-  wheel(delta: number, at: Vec) {
+  /** Wheel input at `at` (screen coords). The nearest part under the pointer
+   *  with a Wheel() interactor takes it (walking up through adornment hosts);
+   *  otherwise the surface zooms, if some part opted in via Pan(). */
+  wheel(delta: number, at: Vec, deltaX = 0) {
+    let cur: Instance | undefined | null =
+      (this.adornRoot && this.renderHit(this.adornRoot, at)) || this.renderHit(this.root, at);
+    while (cur) {
+      const w = this.effs.get(cur).on?.find((i): i is Extract<Interactor<unknown>, { kind: "wheel" }> => i.kind === "wheel");
+      if (w) { this.dispatchFrom(cur, w.to(this.nodeOf(cur), v(deltaX, delta))); this.wake(); return; }
+      cur = this.hostParent(cur);
+    }
     // zoom only when some part opted in via Pan()
     if (!this.anyPan(this.root)) return;
     const z0 = this.viewport.zoom;
@@ -682,7 +692,7 @@ export class Runtime<TDoc, TIntent> {
     canvas.addEventListener("pointermove", (ev) => this.pointerMove(pos(ev), m(ev)));
     canvas.addEventListener("pointerup", (ev) => this.pointerUp(pos(ev)));
     canvas.addEventListener("pointerleave", () => { this.pointer = null; this.wake(); });
-    canvas.addEventListener("wheel", (ev) => { ev.preventDefault(); this.wheel(ev.deltaY, pos(ev)); }, { passive: false });
+    canvas.addEventListener("wheel", (ev) => { ev.preventDefault(); this.wheel(ev.deltaY, pos(ev), ev.deltaX); }, { passive: false });
     // Keys typed into editable DOM (inputs, textareas, contenteditable overlays)
     // belong to that element, not the canvas surface: DOM focus WINS — Tab
     // inside a DOM island stays native. Only when the canvas consumed the key

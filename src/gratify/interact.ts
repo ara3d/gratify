@@ -79,7 +79,8 @@ export type Interactor<P> =
   | { kind: "gesture"; spec: GestureSpec<P, unknown> }
   | { kind: "pan" }                                    // surface: drag empty space pans, wheel zooms
   | { kind: "keys"; map: Record<string, (node: GNode<P>) => Intentish> }
-  | { kind: "focusable" };
+  | { kind: "focusable" }
+  | { kind: "wheel"; to(node: GNode<P>, delta: Vec): Intentish };
 
 /** Emit an intent on click/tap (release inside, below drag threshold). */
 export const Press = <P>(to: (node: GNode<P>) => Intentish): Interactor<P> =>
@@ -108,6 +109,13 @@ export const Keys = <P>(map: Record<string, (node: GNode<P>) => Intentish>): Int
 
 /** Clicking this part gives it keyboard focus (ch.focus eases 0→1). */
 export const Focusable = <P>(): Interactor<P> => ({ kind: "focusable" });
+
+/** Mouse-wheel / trackpad scroll over this part (or any descendant that does
+ *  not take the wheel itself). `delta` is in CSS pixels, y positive = scroll
+ *  down. Routed to the nearest wheel-taking ancestor of the hit; only when no
+ *  part takes it does the surface's Pan() zoom. */
+export const Wheel = <P>(to: (node: GNode<P>, delta: Vec) => Intentish): Interactor<P> =>
+  ({ kind: "wheel", to });
 
 /** Fraction of the way through a rect along an axis, honoring pad. */
 export function axisFraction(

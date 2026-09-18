@@ -217,7 +217,7 @@ type Cap =
   | "props" | "defaults"
   | "size" | "intrinsic" | "measure" | "arrange" | "fill" | "pack" | "body"
   | "style" | "render"
-  | "channels" | "on" | "press" | "drag1d" | "gesture" | "keys"
+  | "channels" | "on" | "press" | "drag1d" | "gesture" | "keys" | "wheel"
   | "adorn" | "island" | "anchors" | "hit" | "clip" | "semantics"
   | "local" | "reduce";
 
@@ -304,6 +304,8 @@ interface BuilderMethods<P, F, S, C extends Cap, K extends string, L> {
   gesture<S2>(spec: GestureSpec<F, S2>): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Keyboard mapping. Routed focus-first, then hover chain, then root. */
   keys(map: Record<string, (node: GNode<F, K, L>) => Intentish>): PartBuilder<P, F, S, Done<C, never>, K, L>;
+  /** Wheel/trackpad scroll over this part; `delta` in CSS px (y down). */
+  wheel(to: (node: GNode<F, K, L>, delta: Vec) => Intentish): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** Append adornments. Repeatable; earlier adorns run first. */
   adorn(f: (node: GNode<F, K, L>) => Element[]): PartBuilder<P, F, S, Done<C, never>, K, L>;
   /** DOM island: glue a stable DOM element to a world rect through pan/zoom
@@ -364,6 +366,7 @@ function builderOf(def: PartDef<any, any>): any {
   b.drag1d = (o: any) => addI({ kind: "drag1d", ...o });
   b.gesture = (spec: any) => addI({ kind: "gesture", spec });
   b.keys = (map: any) => addI({ kind: "keys", map });
+  b.wheel = (to: any) => addI({ kind: "wheel", to });
   b.adorn = (f: any) => chain({ adorn: def.adorn ? (n: any) => [...def.adorn!(n), ...f(n)] : f });
   b.island = (f: any) => chain({ island: f });
   b.anchors = (f: any) => chain({ anchors: f });
