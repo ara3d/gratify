@@ -41,6 +41,7 @@
     "dev": "vite",
     "build": "node scripts/check-boundary.mjs && tsc --noEmit && node scripts/clean-docs.mjs && vite build",
     "build:lib": "node scripts/check-boundary.mjs && node scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
+    "pages": "node scripts/check-boundary.mjs && tsc --noEmit && vite build --outDir _site --emptyOutDir",
     "preview": "vite preview",
     "check": "node scripts/check-boundary.mjs && tsc --noEmit",
     "test": "vitest run",

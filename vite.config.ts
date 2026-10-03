@@ -6,6 +6,12 @@ import { resolve } from "path";
 // base is relative and all hand-written links in the HTML are relative too.
 export default defineConfig({
   base: "./",
+  // No page ships a favicon; an empty one stops the browser requesting
+  // /favicon.ico, which 404s on GitHub Pages and on a static preview.
+  plugins: [{
+    name: "empty-favicon",
+    transformIndexHtml: () => [{ tag: "link", attrs: { rel: "icon", href: "data:," }, injectTo: "head" }],
+  }],
   resolve: {
     alias: { gratify: resolve(__dirname, "src/gratify/index.ts") },
   },

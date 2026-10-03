@@ -1,6 +1,6 @@
 // Clean the GitHub Pages output folder (docs/) before a build, PRESERVING
 // markdown documents (docs/plan.md etc.) AND hand-authored assets (logo,
-// social-preview card) — the folder is shared between the deployed demo, the
+// social-preview card, README screenshots in images/) — the folder is shared between the deployed demo, the
 // repo's design docs, and a few committed source assets. Everything else is
 // vite build output and safe to wipe.
 import { readdirSync, rmSync } from "fs";
@@ -10,7 +10,7 @@ import { join, dirname } from "path";
 const docs = join(dirname(fileURLToPath(import.meta.url)), "..", "docs");
 
 // Committed, non-generated files that live in docs/ and must survive a rebuild.
-const KEEP = new Set(["logo.svg", "social-card.html", "social-card.png"]);
+const KEEP = new Set(["logo.svg", "social-card.html", "social-card.png", "images"]);
 
 for (const name of readdirSync(docs)) {
   if (name.endsWith(".md") || KEEP.has(name)) continue;
