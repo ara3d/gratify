@@ -3,34 +3,58 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gratify — examples</title>
+  <title>Gratify examples</title>
+  <meta name="description" content="Gratify, a TypeScript canvas UI library: a gallery of examples that run in the browser." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@600;700&family=Public+Sans:wght@400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    :root { color-scheme: dark; }
-    body { margin: 0; background: #12141a; color: #ced4e0; font: 15px "Segoe UI", system-ui, sans-serif; }
-    main { max-width: 960px; margin: 8vh auto; padding: 0 24px; }
-    h1 { font-weight: 600; letter-spacing: 0.5px; }
-    h1 span { color: #40baff; }
-    p.tag { color: #828a9c; margin-top: -8px; }
-    ul { list-style: none; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    /* BIM Open family type and neutrals (bim-open-toolkit docs/BRANDING.md); Gratify has no mark or accent of its own. */
+    :root {
+      --font-brand: "Instrument Sans", "Public Sans", "Segoe UI", system-ui, sans-serif;
+      --font-ui: "Public Sans", "Segoe UI", system-ui, sans-serif;
+      --font-mono: "Fira Code", "Cascadia Mono", Consolas, ui-monospace, monospace;
+      --text: #171a1f; --dim: #5a606c; --surface: #ffffff; --bg: #f4f5f7;
+      --border: #e3e6ea; --edge: #cfd4db;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --text: #e8eaee; --dim: #9aa1ad; --surface: #1d2027; --bg: #15171c; --border: #2a2e37; --edge: #3a3f4a; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font-ui); }
+    main { max-width: 980px; margin: 0 auto; padding: 40px 16px 64px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .wordmark { font: 700 28px var(--font-brand); letter-spacing: -0.2px; margin: 0; }
+    .family { font-size: 13px; color: var(--dim); }
+    .family a { color: var(--dim); }
+    p.tag { color: var(--dim); max-width: 70ch; margin: 12px 0 8px; }
+    p.tag b { color: var(--text); font-weight: 600; }
+    p.links { margin: 0 0 24px; font-size: 14px; }
+    p.links a { color: var(--text); }
+    code { font: 13px var(--font-mono); }
+    h2 { font: 600 18px var(--font-brand); margin: 28px 0 12px; }
+    ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 700px) { ul { grid-template-columns: 1fr; } }
     li { margin: 0; }
-    a { display: block; height: 100%; box-sizing: border-box; padding: 14px 18px; border-radius: 10px;
-        background: #242834; color: #ced4e0; text-decoration: none; border: 1px solid #363c4c; transition: all .15s; }
-    a:hover { background: #343a4a; border-color: #40baff; transform: translateY(-1px); }
-    a b { color: #f2f6fc; }
-    a small { color: #828a9c; display: block; margin-top: 3px; }
-    a.repo { display: inline-block; margin-top: 18px; padding: 8px 14px; font-size: 13px; }
-    a.repo:hover { transform: none; }
-    a.top { display: inline-block; margin: 0 0 20px; padding: 8px 14px; font-size: 13px; }
-    a.top:hover { transform: none; }
-    p.tag b { color: #ced4e0; font-weight: 600; }
+    ul a { display: block; height: 100%; padding: 14px 16px; border-radius: 8px; background: var(--surface);
+           color: var(--text); text-decoration: none; border: 1px solid var(--border); transition: border-color .15s, transform .15s; }
+    ul a:hover, ul a:focus-visible { border-color: var(--edge); transform: translateY(-1px); }
+    ul a b { font: 600 14px var(--font-mono); }
+    ul a small { color: var(--dim); display: block; margin-top: 4px; font-size: 13px; }
+    footer { margin-top: 32px; font-size: 13px; color: var(--dim); }
+    footer a { color: var(--dim); }
   </style>
 </head>
 <body>
   <main>
-    <h1><span>Gratify</span> examples</h1>
-    <p class="tag"><b>A TypeScript, canvas-rendered UI framework for interfaces rich with micro-interactions</b> — describe your state as pure functions and every change (hover, press, drag, enter/exit, theme swap) animates itself, with no animation code.</p>
-    <a class="top" href="https://github.com/ara3d/gratify">↗ View the source on GitHub — github.com/ara3d/gratify</a>
+    <header>
+      <h1 class="wordmark">Gratify</h1>
+      <span class="family">Part of the <a href="https://ara3d.github.io/bim-open-toolkit/">BIM Open family</a></span>
+    </header>
+    <p class="tag"><b>A TypeScript UI library that draws the whole interface on one canvas.</b> You describe the interface as pure functions of your state, and every change (hover, press, drag, a row entering or leaving, a theme swap) animates by itself, with no animation code. It suits dashboards, editors, game HUDs, and node graphs rather than text-heavy forms, and it is built for desktop browsers.</p>
+    <p class="links"><a href="https://github.com/ara3d/gratify">Source and README on GitHub</a> &middot; <code>npm install gratify</code></p>
+    <h2>Examples</h2>
+    <p class="tag">Each example below is a page of its own and runs entirely in your browser. Use a mouse and keyboard; touch is untested.</p>
     <ul>
       <li><a href="examples/counter/index.html"><b>counter</b><small>the README hello-world, verbatim — hover, press, and count-up all animate with zero animation code</small></a></li>
       <li><a href="examples/todo/index.html"><b>todo</b><small>keyed enter / exit / reflow — add, complete, and delete rows; watch siblings glide</small></a></li>
@@ -60,7 +84,7 @@
       <li><a href="examples/workbench/index.html"><b>workbench</b><small>the database browser assembled — schema tree, the selected table's rows in a virtualized grid, and the relationship graph, in draggable split panes; one selection fact drives all three, and every pane keeps its own scroll</small></a></li>
       <li><a href="examples/focus-semantics/index.html"><b>focus-semantics</b><small>Tab/Shift-Tab focus ring + Enter/Space activation, tooltip adornments lifted above sibling badges with z-tiers, and a live semanticsTree() readout</small></a></li>
     </ul>
-    <a class="repo" href="https://github.com/ara3d/gratify">↗ github.com/ara3d/gratify — source, README, and plan</a>
+    <footer>MIT licensed &middot; <a href="https://github.com/ara3d/gratify">github.com/ara3d/gratify</a></footer>
   </main>
 </body>
 </html>
