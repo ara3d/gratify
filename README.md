@@ -11,6 +11,8 @@ Inspired by the concept of Juice in games and in particular [Feel](https://feel.
 
 ### ▶ [Try the live demo](https://ara3d.github.io/gratify/) 
 
+Gratify is a library for TypeScript developers who build interfaces that are mostly drawing rather than text: dashboards, editors, node graphs, and game HUDs. You describe the interface as pure functions of your state, Gratify draws it on one `<canvas>`, and every change of state animates on its own. The [live page](https://ara3d.github.io/gratify/) is a gallery of 27 examples that run in the browser with nothing to install; [docs/images/pages-gallery.png](docs/images/pages-gallery.png) shows it. It is built by `npm run pages` and deployed by `.github/workflows/pages.yml`, which needs Pages set to "GitHub Actions" under Settings > Pages.
+
 https://github.com/user-attachments/assets/f77ac0bb-bc53-486d-b51c-a19362b6ed0c
 
 ```bash
